@@ -1,0 +1,130 @@
+/* ==========================================================================
+   VARIABLES DE COLOR (Basadas en tu app Android)
+   ========================================================================== */
+:root {
+    --primary-color: #6200EE;
+    --primary-dark: #3700B3;
+    --bg-color: #F4F4F9;
+    --surface-color: #FFFFFF;
+    --text-main: #1C1B1F;
+    --text-muted: #49454F;
+    --border-radius: 16px;
+}
+
+/* ==========================================================================
+   RESETEO BÁSICO Y TRUCOS PARA PWA (App-like feel)
+   ========================================================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    /* Evita que el usuario seleccione el texto por accidente como en una web */
+    -webkit-user-select: none;
+    user-select: none;
+    /* Elimina el resaltado azul al tocar botones en Android/iOS */
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    /* Usa la fuente nativa del celular (San Francisco en iPhone, Roboto en Android) */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    /* Evita el "rebote" (overscroll) molesto del navegador en los bordes */
+    overscroll-behavior-y: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ==========================================================================
+   ESTRUCTURA PRINCIPAL
+   ========================================================================== */
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Barra superior (TopAppBar) */
+header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 16px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    /* Asegura que la barra respete el "notch" (la muesca) de los iPhone modernos */
+    padding-top: max(16px, env(safe-area-inset-top)); 
+    z-index: 10;
+}
+
+header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* Área de contenido */
+main {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    /* Permite hacer scroll solo en el contenido si es muy largo */
+    overflow-y: auto; 
+}
+
+/* ==========================================================================
+   TARJETAS (Cards)
+   ========================================================================== */
+#login-section, #dashboard-section {
+    background-color: var(--surface-color);
+    width: 100%;
+    max-width: 400px;
+    padding: 32px 24px;
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    text-align: center;
+}
+
+h2 {
+    font-size: 24px;
+    margin-bottom: 12px;
+    color: var(--primary-color);
+}
+
+p {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+
+/* ==========================================================================
+   BOTONES
+   ========================================================================== */
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    width: 100%;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+/* Efecto al tocar el botón (Feedback visual) */
+button:active {
+    background-color: var(--primary-dark);
+    transform: scale(0.97);
+}
+
+/* Ocultar elementos temporalmente */
+.hidden {
+    display: none !important;
+}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <title>Mi Territorio</title>
+    
+    <link rel="manifest" href="manifest.json">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mi Territorio">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="app">
+        <header>
+            <h1>Mi Territorio (Web)</h1>
+        </header>
+        
+        <main>
+            <div id="login-section">
+                <h2>Bienvenido</h2>
+                <p>Inicia sesión para ver tu territorio.</p>
+                <button id="btn-login">Entrar con Google</button>
+            </div>
+            
+            <div id="dashboard-section" style="display: none;">
+                <p>Cargando datos desde Firebase...</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registrado!', reg.scope))
+                    .catch(err => console.log('Error al registrar Service Worker', err));
+            });
+        }
+    </script>
+</body>
+</html>
