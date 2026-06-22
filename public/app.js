@@ -1,12 +1,10 @@
-// Importamos Firebase (Vanilla JS)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-// IMPORTANTE: Cambiamos signInWithPopup por signInWithRedirect y getRedirectResult
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-// LA CONFIGURACIÓN REAL DE TU APP
+// Tu configuración original con la API Key correcta
 const firebaseConfig = {
-  apiKey: "AIzaSyALd_miTZySLluocbxI8EUp1e18UE4-8NQ",
+  apiKey: "AIzaSyALd_mItZYSLluocbxI8EUPle18UE4-8NQ",
   authDomain: "territorios-a3ba5.firebaseapp.com",
   projectId: "territorios-a3ba5",
   storageBucket: "territorios-a3ba5.firebasestorage.app",
@@ -15,42 +13,86 @@ const firebaseConfig = {
   measurementId: "G-097G2Y8GRG"
 };
 
-// Inicializamos Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// Lógica de la interfaz
 const btnLogin = document.getElementById('btn-login');
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-// Evento para el botón "Entrar con Google" usando Redirección (Ideal para móviles)
+// Botón de Login adaptado 100% a celulares
 btnLogin.addEventListener('click', () => {
     signInWithRedirect(auth, provider);
 });
 
-// Atrapamos al usuario cuando Google lo devuelve a nuestra PWA
+// Capturamos cualquier error silencioso al volver de Google
 getRedirectResult(auth).then((result) => {
-    if (result) {
-        console.log("Usuario logueado con éxito después del redirect:", result.user.email);
-    }
+    if (result) console.log("Login exitoso tras redirección");
 }).catch((error) => {
-    console.error("Error al iniciar sesión:", error);
+    console.error("Error en redirect:", error);
 });
 
-// Escuchamos si el usuario ya está conectado
-onAuthStateChanged(auth, (user) => {
+// El corazón de la aplicación
+onAuthStateChanged(auth, async (user) => {
     if (user) {
+        // 1. CHALECO ANTIBALAS: Mostrar el panel inmediatamente (evita el rebote)
         loginSection.style.display = 'none';
         dashboardSection.style.display = 'block';
-        dashboardSection.innerHTML = `
-            <h2>¡Hola, ${user.displayName}!</h2>
-            <p>Conectado como: ${user.email}</p>
-            <p><em>Sincronizando datos con la nube...</em></p>
-        `;
+
+        try {
+            document.getElementById('user-greeting').innerText = `¡Hola, ${user.displayName || 'Hermano'}!`;
+            document.getElementById('user-email').innerText = `Cargando tu mapa...`;
+        } catch(e) { console.error("Error en HTML", e); }
+
+        // 2. CARGAR EL MAPA
+        try {
+            if (typeof google === 'undefined') {
+                throw new Error("Falta inyectar la API Key de Google Maps en el código.");
+            }
+
+            const map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 14,
+                center: { lat: -32.8908, lng: -68.8272 }, // Coordenadas temporales
+                disableDefaultUI: true,
+                zoomControl: true
+            });
+
+            map.data.setStyle((feature) => {
+                let color = feature.getProperty('fill') || '#6200EE';
+                return {
+                    fillColor: color,
+                    strokeColor: '#000000',
+                    strokeWeight: 2,
+                    fillOpacity: 0.35
+                };
+            });
+
+            // 3. DESCARGAR TERRITORIOS
+            const idCongregacion = "1552"; 
+            const territoriosRef = collection(db, "congregaciones", idCongregacion, "territorios");
+            const snapshot = await getDocs(territoriosRef);
+
+            let contador = 0;
+            snapshot.forEach((doc) => {
+                const geojsonString = doc.data().geojson;
+                if (geojsonString) {
+                    const geojsonObj = JSON.parse(geojsonString);
+                    map.data.addGeoJson(geojsonObj); 
+                    contador++;
+                }
+            });
+
+            document.getElementById('user-email').innerText = `¡Mapas cargados exitosamente! (${contador})`;
+
+        } catch (error) {
+            console.error("Fallo visual:", error);
+            document.getElementById('user-email').innerText = error.message;
+        }
+
     } else {
+        // Si no hay sesión iniciada, mostrar botón
         loginSection.style.display = 'block';
         dashboardSection.style.display = 'none';
     }
