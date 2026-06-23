@@ -14,7 +14,6 @@ const firebaseConfig = {
   measurementId: "G-097G2Y8GRG"
 };
 
-
 // Inicializamos los servicios
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -43,7 +42,7 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         console.log("Usuario autenticado:", user.email);
 
-        // A. CHALECO ANTIBALAS: Cambiar de pantalla de inmediato para evitar rebotes
+        // A. CHALECO ANTIBALAS: Cambiar de pantalla de inmediato
         loginSection.style.display = 'none';
         dashboardSection.style.display = 'block';
 
@@ -76,15 +75,14 @@ onAuthStateChanged(auth, async (user) => {
             scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${apiMapsWeb}`;
             scriptMapa.async = true;
             
-            // Definimos qué pasa cuando el mapa termine de descargarse de los servidores de Google
+            // Definimos qué pasa cuando el mapa termine de descargarse
             scriptMapa.onload = async () => {
                 document.getElementById('user-email').innerText = `Dibujando el territorio...`;
 
-                // Inicializamos el mapa en el contenedor div con id="map"
+                // Inicializamos el mapa
                 const map = new google.maps.Map(document.getElementById("map"), {
-                    zoom: 14,
-                    center: { lat: -32.8908, lng: -68.8272 }, // Coordenadas de tu ciudad
-                    disableDefaultUI: true, // Quita controles innecesarios para parecer App nativa
+                    // Quitamos zoom y center fijos porque los calcularemos dinámicamente
+                    disableDefaultUI: true, 
                     zoomControl: true
                 });
 
@@ -104,14 +102,33 @@ onAuthStateChanged(auth, async (user) => {
                 const snapshot = await getDocs(territoriosRef);
 
                 let contador = 0;
+                // Inicializamos nuestra "banda elástica" para encuadrar el mapa
+                const bounds = new google.maps.LatLngBounds();
+
                 snapshot.forEach((doc) => {
                     const geojsonString = doc.data().geojson;
                     if (geojsonString) {
-                        // Google Maps procesa y dibuja el string GeoJSON automáticamente
-                        map.data.addGeoJson(JSON.parse(geojsonString)); 
+                        const parsedGeoJson = JSON.parse(geojsonString);
+                        
+                        // Añadimos el polígono a la capa de datos
+                        const features = map.data.addGeoJson(parsedGeoJson); 
+                        
+                        // Recorremos los puntos de este polígono para estirar la banda elástica
+                        features.forEach((feature) => {
+                            const geometry = feature.getGeometry();
+                            geometry.forEachLatLng((latLng) => {
+                                bounds.extend(latLng);
+                            });
+                        });
+                        
                         contador++;
                     }
                 });
+
+                // Una vez cargados todos los territorios, le decimos al mapa que se encuadre
+                if(contador > 0) {
+                     map.fitBounds(bounds);
+                }
 
                 document.getElementById('user-email').innerText = `¡Éxito! ${contador} zonas de territorio sincronizadas.`;
             };
