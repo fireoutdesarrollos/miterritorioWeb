@@ -122,24 +122,27 @@ onAuthStateChanged(auth, async (user) => {
                     });
                     
                     const centro = featureBounds.getCenter();
-                    const numManzana = feature.getProperty('numero') || '';
+                   const numManzana = feature.getProperty('numero') || '';
                     const numTerritorio = feature.getProperty('territorio') || '';
 
                     if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
+
+                    // NUEVO: Formato exacto de Android "T23 - F"
+                    const textoEtiqueta = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
 
                     // MICRO
                     const microMarker = new google.maps.Marker({
                         position: centro,
                         label: { 
-                            text: numManzana, 
+                            text: textoEtiqueta, // <-- Aplicamos el texto completo
                             color: 'black', 
                             fontWeight: '900', 
-                            fontSize: '16px',
+                            fontSize: '14px',    // Un poco más chico para que encaje perfecto
                             className: 'map-label-micro'
                         },
                         icon: { url: "", scaledSize: new google.maps.Size(0,0) }
                     });
-                    marcadoresMicro.push(microMarker);
+                    marcadoresMicro.push(microMarker);   
 
                     // AGRUPACIÓN MACRO
                     if (numTerritorio) {
