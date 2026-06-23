@@ -170,27 +170,31 @@ button:active {
     text-shadow: 0px 0px 4px white, 0px 0px 4px white, 0px 0px 4px white;
 }
 /* =========================================
-   MIS VISITAS (Tarjetas y Filtros)
+   MIS VISITAS (Tarjetas y Filtros Premium)
    ========================================= */
 .visitas-filtros {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     overflow-x: auto;
-    padding-bottom: 10px;
-    margin-bottom: 15px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.1); /* Línea separadora sutil */
 }
 
+/* Ocultar barra de scroll en los filtros */
+.visitas-filtros::-webkit-scrollbar { display: none; }
+
 .filtro-chip {
-    background-color: #e0e0e0;
-    color: var(--text-color);
-    border: none;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 13px;
+    background-color: #E0E0E0;
+    color: #424242;
+    border: 1px solid transparent;
+    padding: 8px 18px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 600;
     white-space: nowrap;
-    margin: 0;
-    width: auto;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .filtro-chip.active {
@@ -200,26 +204,47 @@ button:active {
 
 .visita-card {
     background-color: white;
-    border-radius: 12px;
-    padding: 15px;
+    border-radius: 16px; /* Más redondeado, estilo app moderna */
+    padding: 16px 20px;
     margin-bottom: 12px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.04);
     display: flex;
     align-items: center;
     cursor: pointer;
+    border: 1px solid rgba(0,0,0,0.03);
+}
+
+.visita-card:active {
+    opacity: 0.7; /* Efecto al tocar la tarjeta */
 }
 
 .visita-color {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
-    margin-right: 15px;
+    margin-right: 18px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.visita-info h3 { margin: 0 0 5px 0; font-size: 16px; color: var(--text-color); }
-.visita-info p { margin: 0; font-size: 13px; color: gray; }
+.visita-info h3 { margin: 0 0 6px 0; font-size: 17px; color: var(--text-color); font-weight: 700; }
+.visita-info p { margin: 0; font-size: 13px; color: #757575; font-weight: 500; }
 
+/* --- Ajustes exclusivos para el MODO OSCURO --- */
 @media (prefers-color-scheme: dark) {
-    .visita-card { background-color: var(--primary-dark); }
-    .filtro-chip { background-color: #333333; }
+    .visitas-filtros { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    
+    .filtro-chip { 
+        background-color: #2C2C2C; 
+        color: #E0E0E0; 
+        border: 1px solid #404040; 
+    }
+    
+    .visita-card { 
+        background-color: #160D24; /* Un morado súper oscuro y elegante */
+        border: 1px solid rgba(255,255,255,0.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .visita-info p { color: #A0A0A0; }
 }
