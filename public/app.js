@@ -255,3 +255,7 @@ tabs.forEach(tab => {
         else targetView.style.display = 'block';
     });
 });
+// CERRAR FICHA DE VISITA
+document.getElementById('btn-cerrar-ficha').addEventListener('click', () => {
+    document.getElementById('ficha-modal').style.display = 'none';
+});
