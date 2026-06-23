@@ -27,12 +27,28 @@
                 <button id="btn-login">Entrar con Google</button>
             </div>
             
-            <div id="dashboard-section" style="display: none;">
-                <h2 id="user-greeting">¡Hola!</h2>
-                <p id="user-email">Cargando...</p>
-                
-                <div id="map"></div>
-            </div>
+            <div id="dashboard-section" style="display: none; height: 100vh; display: flex; flex-direction: column;">
+    
+    <header class="app-bar">
+        <h1 class="app-title">Suárez</h1>
+        <div class="app-icons">
+            <span class="icon-help">❔</span>
+            <span class="icon-profile">👤</span>
+        </div>
+    </header>
+
+    <nav class="app-tabs">
+        <button class="tab active">Mapa</button>
+        <button class="tab">Mis Visitas</button>
+        <button class="tab">Servicio</button>
+    </nav>
+
+    <div class="map-container">
+        <div id="map"></div>
+        <button class="fab-button">📋</button>
+    </div>
+
+    </div>
         </main>
     </div>
 
