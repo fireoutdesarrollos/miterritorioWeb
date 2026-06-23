@@ -1,16 +1,26 @@
-// Estrategia: Network First (Primero internet, luego caché)
-// Esto asegura que la PWA no se quede trabada con código viejo mientras desarrollas.
+const CACHE_NAME = 'territorios-cache-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app.js'
+];
 
+// Instalar y guardar en caché los archivos básicos
 self.addEventListener('install', event => {
-    self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
+  );
 });
 
-self.addEventListener('activate', event => {
-    event.waitUntil(clients.claim());
-});
-
+// Interceptar peticiones para cargar rápido
 self.addEventListener('fetch', event => {
-    event.respondWith(
-        fetch(event.request).catch(() => caches.match(event.request))
-    );
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        // Devuelve la versión en caché si existe, sino va a internet
+        return response || fetch(event.request);
+      })
+  );
 });
