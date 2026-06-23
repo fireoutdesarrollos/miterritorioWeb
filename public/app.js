@@ -95,16 +95,16 @@ scriptMapa.onload = async () => {
                     streetViewControl: false
                 });
 
+// Definimos el diseño visual de las manzanas (Más limpio, estilo Android)
                 map.data.setStyle((feature) => {
                     let color = feature.getProperty('fill') || '#6200EE';
                     return {
                         fillColor: color,
-                        strokeColor: '#000000',
-                        strokeWeight: 2,
+                        strokeColor: '#444444', // Gris oscuro sutil
+                        strokeWeight: 1,        // Borde mucho más fino
                         fillOpacity: 0.35
                     };
                 });
-
                 const territoriosRef = collection(db, "congregaciones", "1552", "territorios");
                 const snapshot = await getDocs(territoriosRef);
 
@@ -141,23 +141,35 @@ scriptMapa.onload = async () => {
 
                     if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
 
-                    // A. Crear etiqueta MICRO (Manzana)
+                   // A. Crear etiqueta MICRO (Manzana - Solo el número)
                     const microMarker = new google.maps.Marker({
                         position: centro,
-                        label: { text: numManzana, color: 'black', fontWeight: 'bold', fontSize: '14px' },
-                        icon: { url: "", scaledSize: new google.maps.Size(0,0) } // Truco para ocultar el pin rojo
+                        label: { 
+                            text: numManzana, // Acá aseguramos que solo muestre el número (ej: "1")
+                            color: 'black', 
+                            fontWeight: '900', 
+                            fontSize: '16px',
+                            className: 'map-label-micro'
+                        },
+                        icon: { url: "", scaledSize: new google.maps.Size(0,0) }
                     });
                     marcadoresMicro.push(microMarker);
 
-                    // B. Agrupar datos para la etiqueta MACRO (Territorio)
-                    if (numTerritorio) {
-                        if (!agrupacionMacro[numTerritorio]) {
-                            agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
-                        }
-                        agrupacionMacro[numTerritorio].latSum += centro.lat();
-                        agrupacionMacro[numTerritorio].lngSum += centro.lng();
-                        agrupacionMacro[numTerritorio].count += 1;
-                    }
+// C. Crear etiquetas MACRO (Territorio gigante)
+                Object.keys(agrupacionMacro).forEach(terr => {
+                    const data = agrupacionMacro[terr];
+                    const macroMarker = new google.maps.Marker({
+                        position: { lat: data.latSum / data.count, lng: data.lngSum / data.count },
+                        label: { 
+                            text: terr, 
+                            color: 'black', 
+                            fontWeight: '900', 
+                            fontSize: '34px', // Tamaño gigante como en Android
+                            className: 'map-label-macro' 
+                        },
+                        icon: { url: "", scaledSize: new google.maps.Size(0,0) }
+                    });
+                    marcadoresMacro.push(macroMarker);
                 });
 
                 // C. Crear etiquetas MACRO calculando el promedio
