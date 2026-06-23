@@ -37,7 +37,7 @@
 
             <nav class="app-tabs">
                 <button class="tab active" data-target="map-view">Mapa</button>
-                <button class="tab" data-target="visitas-view">Mis Visitas</button>
+                <button class="tab" data-target="visitas-view">Vista 2: MIS VISITAS</button>
                 <button class="tab" id="tab-servicio" data-target="servicio-view" style="display: none;">Servicio</button>
             </nav>
 
@@ -49,10 +49,21 @@
                     <button class="fab-button">📋</button>
                 </div>
 
-                <div id="visitas-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
+                               <div id="visitas-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
                     <h2 style="margin-top: 0; color: var(--text-color);">Mis Visitas</h2>
-                    <p style="color: gray;">Tu libreta digital está vacía. En el futuro, mantén presionado un punto en el mapa para registrar una visita nueva.</p>
+                    
+                    <div class="visitas-filtros">
+                        <button class="filtro-chip active" data-filtro="Todos">Todos</button>
+                        <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
+                        <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
+                        <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
+                    </div>
+
+                    <div id="lista-visitas-container">
+                        <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>
+                    </div>
                 </div>
+
 
                 <div id="servicio-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
                     <h2 style="margin-top: 0; color: var(--text-color);">Rincón de Servicio</h2>
