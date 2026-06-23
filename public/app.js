@@ -85,17 +85,16 @@ onAuthStateChanged(auth, async (user) => {
             scriptMapa.async = true;
             
             // Definimos qué pasa cuando el mapa termine de descargarse
-            scriptMapa.onload = async () => {
+scriptMapa.onload = async () => {
                 document.getElementById('user-email').innerText = `Dibujando el territorio...`;
 
-                // Inicializamos el mapa
                 const map = new google.maps.Map(document.getElementById("map"), {
-                    // Quitamos zoom y center fijos porque los calcularemos dinámicamente
                     disableDefaultUI: true, 
-                    zoomControl: true
+                    zoomControl: false, // Lo quitamos para que sea 100% táctil como la app
+                    mapTypeControl: false,
+                    streetViewControl: false
                 });
 
-                // Definimos el diseño visual de las manzanas/polígonos
                 map.data.setStyle((feature) => {
                     let color = feature.getProperty('fill') || '#6200EE';
                     return {
@@ -106,40 +105,103 @@ onAuthStateChanged(auth, async (user) => {
                     };
                 });
 
-                // Descargamos los GeoJSON de la congregación 1552
                 const territoriosRef = collection(db, "congregaciones", "1552", "territorios");
                 const snapshot = await getDocs(territoriosRef);
 
                 let contador = 0;
-                // Inicializamos nuestra "banda elástica" para encuadrar el mapa
                 const bounds = new google.maps.LatLngBounds();
+                
+                // Arreglos para guardar nuestros textos flotantes
+                const marcadoresMicro = [];
+                const marcadoresMacro = [];
+                const agrupacionMacro = {};
 
+                // --- 1. PROCESAR GEOJSON Y CREAR LÍMITES ---
                 snapshot.forEach((doc) => {
                     const geojsonString = doc.data().geojson;
                     if (geojsonString) {
                         const parsedGeoJson = JSON.parse(geojsonString);
-                        
-                        // Añadimos el polígono a la capa de datos
-                        const features = map.data.addGeoJson(parsedGeoJson); 
-                        
-                        // Recorremos los puntos de este polígono para estirar la banda elástica
-                        features.forEach((feature) => {
-                            const geometry = feature.getGeometry();
-                            geometry.forEachLatLng((latLng) => {
-                                bounds.extend(latLng);
-                            });
-                        });
-                        
+                        map.data.addGeoJson(parsedGeoJson); 
                         contador++;
                     }
                 });
 
-                // Una vez cargados todos los territorios, le decimos al mapa que se encuadre
-                if(contador > 0) {
-                     map.fitBounds(bounds);
+                // --- 2. MATEMÁTICA DE CENTROS Y ETIQUETAS ---
+                // Iteramos sobre lo que Google Maps ya dibujó
+                map.data.forEach((feature) => {
+                    const featureBounds = new google.maps.LatLngBounds();
+                    feature.getGeometry().forEachLatLng(latLng => {
+                        bounds.extend(latLng); // Para la cámara general
+                        featureBounds.extend(latLng); // Para el centro de esta manzana
+                    });
+                    
+                    const centro = featureBounds.getCenter();
+                    const numManzana = feature.getProperty('numero') || '';
+                    const numTerritorio = feature.getProperty('territorio') || '';
+
+                    if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
+
+                    // A. Crear etiqueta MICRO (Manzana)
+                    const microMarker = new google.maps.Marker({
+                        position: centro,
+                        label: { text: numManzana, color: 'black', fontWeight: 'bold', fontSize: '14px' },
+                        icon: { url: "", scaledSize: new google.maps.Size(0,0) } // Truco para ocultar el pin rojo
+                    });
+                    marcadoresMicro.push(microMarker);
+
+                    // B. Agrupar datos para la etiqueta MACRO (Territorio)
+                    if (numTerritorio) {
+                        if (!agrupacionMacro[numTerritorio]) {
+                            agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
+                        }
+                        agrupacionMacro[numTerritorio].latSum += centro.lat();
+                        agrupacionMacro[numTerritorio].lngSum += centro.lng();
+                        agrupacionMacro[numTerritorio].count += 1;
+                    }
+                });
+
+                // C. Crear etiquetas MACRO calculando el promedio
+                Object.keys(agrupacionMacro).forEach(terr => {
+                    const data = agrupacionMacro[terr];
+                    const macroMarker = new google.maps.Marker({
+                        position: { lat: data.latSum / data.count, lng: data.lngSum / data.count },
+                        label: { text: terr, color: 'black', fontWeight: '900', fontSize: '28px' },
+                        icon: { url: "", scaledSize: new google.maps.Size(0,0) }
+                    });
+                    marcadoresMacro.push(macroMarker);
+                });
+
+                // --- 3. EL VIGILANTE DEL ZOOM ---
+                map.addListener('zoom_changed', () => {
+                    const zoom = map.getZoom();
+                    if (zoom >= 15.5) {
+                        // Nivel calle: Mostrar manzanas
+                        marcadoresMicro.forEach(m => m.setMap(map));
+                        marcadoresMacro.forEach(m => m.setMap(null));
+                    } else if (zoom >= 13) {
+                        // Nivel barrio: Mostrar territorios grandes
+                        marcadoresMicro.forEach(m => m.setMap(null));
+                        marcadoresMacro.forEach(m => m.setMap(map));
+                    } else {
+                        // Nivel ciudad: Ocultar todo para no saturar
+                        marcadoresMicro.forEach(m => m.setMap(null));
+                        marcadoresMacro.forEach(m => m.setMap(null));
+                    }
+                });
+
+                // --- 4. ENFOQUE FINAL ---
+                if (contador > 0) {
+                    map.fitBounds(bounds);
+                    // Forzamos al vigilante a revisar el zoom inicial
+                    google.maps.event.trigger(map, 'zoom_changed');
                 }
 
-                document.getElementById('user-email').innerText = `¡Éxito! ${contador} zonas de territorio sincronizadas.`;
+                document.getElementById('user-email').innerText = `¡Éxito! ${contador} zonas sincronizadas.`;
+                
+                // Ocultar el cartelito después de 3 segundos
+                setTimeout(() => {
+                    document.getElementById('user-email').style.display = 'none';
+                }, 3000);
             };
 
             // Inyectamos el script en el HTML para activar la descarga
