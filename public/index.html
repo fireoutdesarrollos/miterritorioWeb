@@ -20,8 +20,7 @@
         <div style="display: flex; flex-direction: column; height: 100%;">
             
             <header class="app-bar">
-                <h1 class="app-title">Suárez</h1>
-                
+                <h1 class="app-title">Cargando...</h1>
                 <div class="app-icons" style="display: flex; align-items: center;">
                     <span class="icon-help" style="cursor: pointer; display: flex; margin-left: 20px;">
                         <svg viewBox="0 0 24 24" fill="white" width="26px" height="26px">
@@ -37,19 +36,30 @@
             </header>
 
             <nav class="app-tabs">
-                <button class="tab active">Mapa</button>
-                <button class="tab">Mis Visitas</button>
-                <button class="tab">Servicio</button>
+                <button class="tab active" data-target="map-view">Mapa</button>
+                <button class="tab" data-target="visitas-view">Mis Visitas</button>
+                <button class="tab" id="tab-servicio" data-target="servicio-view" style="display: none;">Servicio</button>
             </nav>
 
-            <div class="map-container">
-                <div id="map"></div>
+            <div id="views-container" style="flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; background-color: var(--bg-color);">
                 
-                <div id="user-email" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 6px 16px; border-radius: 20px; z-index: 1000; font-size: 12px; pointer-events: none;"></div>
+                <div id="map-view" class="view-section map-container" style="display: flex;">
+                    <div id="map"></div>
+                    <div id="user-email" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 6px 16px; border-radius: 20px; z-index: 1000; font-size: 12px; pointer-events: none;"></div>
+                    <button class="fab-button">📋</button>
+                </div>
 
-                <button class="fab-button">📋</button>
+                <div id="visitas-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
+                    <h2 style="margin-top: 0; color: var(--text-color);">Mis Visitas</h2>
+                    <p style="color: gray;">Tu libreta digital está vacía. En el futuro, mantén presionado un punto en el mapa para registrar una visita nueva.</p>
+                </div>
+
+                <div id="servicio-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
+                    <h2 style="margin-top: 0; color: var(--text-color);">Rincón de Servicio</h2>
+                    <p style="color: gray;">Panel exclusivo para administrar los territorios de la congregación.</p>
+                </div>
+
             </div>
-
         </div>
     </div>
 
