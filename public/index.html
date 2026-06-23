@@ -1,67 +1,49 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#6200EE">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mi Territorio</title>
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Mi Territorio">
-    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#a875ff">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="app">
-        <header>
-            <h1>Mi Territorio (Web)</h1>
-        </header>
-        
-        <main>
-            <div id="login-section">
-                <h2>Bienvenido</h2>
-                <p>Inicia sesión para ver tu territorio.</p>
-                <button id="btn-login">Entrar con Google</button>
-            </div>
+    <div id="login-section">
+        <img src="icon-192.png" alt="Logo" style="width: 100px; border-radius: 20px; margin-bottom: 20px;">
+        <h1 id="user-greeting">Bienvenido</h1>
+        <button id="btn-login">Iniciar sesión con Google</button>
+    </div>
+
+    <div id="dashboard-section" style="display: none; height: 100vh; width: 100vw;">
+        <div style="display: flex; flex-direction: column; height: 100%;">
             
-            <div id="dashboard-section" style="display: none; height: 100vh; display: flex; flex-direction: column;">
-    
-    <header class="app-bar">
-        <h1 class="app-title">Suárez</h1>
-        <div class="app-icons">
-            <span class="icon-help">❔</span>
-            <span class="icon-profile">👤</span>
+            <header class="app-bar">
+                <h1 class="app-title">Suárez</h1>
+                <div class="app-icons">
+                    <span class="icon-help">❔</span>
+                    <span class="icon-profile">👤</span>
+                </div>
+            </header>
+
+            <nav class="app-tabs">
+                <button class="tab active">Mapa</button>
+                <button class="tab">Mis Visitas</button>
+                <button class="tab">Servicio</button>
+            </nav>
+
+            <div class="map-container">
+                <div id="map"></div>
+                
+                <div id="user-email" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 6px 16px; border-radius: 20px; z-index: 1000; font-size: 12px; pointer-events: none;"></div>
+
+                <button class="fab-button">📋</button>
+            </div>
+
         </div>
-    </header>
-
-    <nav class="app-tabs">
-        <button class="tab active">Mapa</button>
-        <button class="tab">Mis Visitas</button>
-        <button class="tab">Servicio</button>
-    </nav>
-
-    <div class="map-container">
-        <div id="map"></div>
-        <button class="fab-button">📋</button>
-    </div>
-
-    </div>
-        </main>
     </div>
 
     <script type="module" src="app.js"></script>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('Service Worker registrado!'))
-                    .catch(err => console.log('Error al registrar Service Worker', err));
-            });
-        }
-    </script>
 </body>
 </html>
