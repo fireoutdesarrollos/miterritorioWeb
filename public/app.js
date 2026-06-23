@@ -23,13 +23,11 @@ const firebaseConfig = {
   measurementId: "G-097G2Y8GRG"
 };
 
-// Inicializamos los servicios
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// Elementos de la interfaz (HTML)
 const btnLogin = document.getElementById('btn-login');
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
@@ -48,25 +46,61 @@ getRedirectResult(auth).then((result) => {
 // 4. EL CORAZÓN DE LA APLICACIÓN
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // Cambiar de pantalla
         loginSection.style.display = 'none';
         dashboardSection.style.display = 'block';
 
         try {
-            // Buscamos el documento con la API Key en Firestore
+            const msgElement = document.getElementById('user-email');
+            if (msgElement) {
+                msgElement.style.display = 'block';
+                msgElement.innerText = `Identificando usuario...`;
+            }
+
+            // ==========================================
+            // FASE 1: SISTEMA DE USUARIOS Y ROLES
+            // ==========================================
+            const email = user.email;
+            let nombreCompleto = user.displayName || "Hermano";
+            let miCongregacionId = "1552"; // Usamos tu base actual
+            let miRol = "publicador";
+
+            // 1. Buscar en Firestore los datos del hermano
+            const userRef = doc(db, "usuarios", email);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido}`;
+            }
+
+            // 2. Buscar datos de la congregación y verificar permisos
+            const congRef = doc(db, "congregaciones", miCongregacionId);
+            const congSnap = await getDoc(congRef);
+            if (congSnap.exists()) {
+                const congData = congSnap.data();
+                const nombreCong = congData.nombre || `Congregación ${miCongregacionId}`;
+                
+                // Magia visual: Cambiamos "Suárez" por el nombre real de Firebase
+                const titleElement = document.querySelector('.app-title');
+                if (titleElement) titleElement.innerText = nombreCong;
+
+                // Si el hermano tiene un rol especial, lo guardamos
+                if (congData.roles && congData.roles[email]) {
+                    miRol = congData.roles[email];
+                }
+            }
+            
+            // Guardamos todo en la ventana para usarlo en el futuro (ej: registrar visitas)
+            window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId };
+            console.log(`👤 Hermano: ${nombreCompleto} | 🛡️ Rol: ${miRol} | 📍 Cong: ${miCongregacionId}`);
+            // ==========================================
+
+            // Buscamos la llave del mapa
+            if (msgElement) msgElement.innerText = `Conectando con Google Maps...`;
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
             
-            if (!llaveSnap.exists()) {
-                throw new Error("No se encontró el documento 'ApiKeys'.");
-            }
-            
+            if (!llaveSnap.exists()) throw new Error("No se encontró el documento 'ApiKeys'.");
             const apiMapsWeb = llaveSnap.data().ApiMapsWeb;
-            const msgElement = document.getElementById('user-email');
-            
-            if (msgElement) msgElement.innerText = `Descargando Google Maps...`;
 
-            // Inyectar el script de Google Maps
             const scriptMapa = document.createElement('script');
             scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${apiMapsWeb}`;
             scriptMapa.async = true;
@@ -74,7 +108,6 @@ onAuthStateChanged(auth, async (user) => {
             scriptMapa.onload = async () => {
                 if (msgElement) msgElement.innerText = `Dibujando el territorio...`;
 
-                // Inicializar mapa sin controles molestos
                 const map = new google.maps.Map(document.getElementById("map"), {
                     disableDefaultUI: true, 
                     zoomControl: false,
@@ -82,7 +115,6 @@ onAuthStateChanged(auth, async (user) => {
                     streetViewControl: false
                 });
 
-                // ESTILOS FINOS (Igual a Android)
                 map.data.setStyle((feature) => {
                     let color = feature.getProperty('fill') || '#6200EE';
                     return {
@@ -93,18 +125,16 @@ onAuthStateChanged(auth, async (user) => {
                     };
                 });
 
-                // Cargar datos de Firestore
-                const territoriosRef = collection(db, "congregaciones", "1552", "territorios");
+                // Usamos la variable dinámica de congregación
+                const territoriosRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios");
                 const snapshot = await getDocs(territoriosRef);
 
                 let contador = 0;
                 const bounds = new google.maps.LatLngBounds();
-                
                 const marcadoresMicro = [];
                 const marcadoresMacro = [];
                 const agrupacionMacro = {};
 
-                // 1. DIBUJAR POLÍGONOS
                 snapshot.forEach((doc) => {
                     const geojsonString = doc.data().geojson;
                     if (geojsonString) {
@@ -113,7 +143,6 @@ onAuthStateChanged(auth, async (user) => {
                     }
                 });
 
-                // 2. CALCULAR CENTROS Y CREAR ETIQUETAS
                 map.data.forEach((feature) => {
                     const featureBounds = new google.maps.LatLngBounds();
                     feature.getGeometry().forEachLatLng(latLng => {
@@ -122,29 +151,20 @@ onAuthStateChanged(auth, async (user) => {
                     });
                     
                     const centro = featureBounds.getCenter();
-                   const numManzana = feature.getProperty('numero') || '';
+                    const numManzana = feature.getProperty('numero') || '';
                     const numTerritorio = feature.getProperty('territorio') || '';
 
                     if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
 
-                    // NUEVO: Formato exacto de Android "T23 - F"
                     const textoEtiqueta = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
 
-                    // MICRO
                     const microMarker = new google.maps.Marker({
                         position: centro,
-                        label: { 
-                            text: textoEtiqueta, // <-- Aplicamos el texto completo
-                            color: 'black', 
-                            fontWeight: '900', 
-                            fontSize: '14px',    // Un poco más chico para que encaje perfecto
-                            className: 'map-label-micro'
-                        },
+                        label: { text: textoEtiqueta, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' },
                         icon: { url: "", scaledSize: new google.maps.Size(0,0) }
                     });
-                    marcadoresMicro.push(microMarker);   
+                    marcadoresMicro.push(microMarker);
 
-                    // AGRUPACIÓN MACRO
                     if (numTerritorio) {
                         if (!agrupacionMacro[numTerritorio]) {
                             agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
@@ -153,26 +173,18 @@ onAuthStateChanged(auth, async (user) => {
                         agrupacionMacro[numTerritorio].lngSum += centro.lng();
                         agrupacionMacro[numTerritorio].count += 1;
                     }
-                }); // <-- ¡Esta es la llavecita que había provocado el choque!
+                });
 
-                // 3. GENERAR MARCADORES MACRO
                 Object.keys(agrupacionMacro).forEach(terr => {
                     const data = agrupacionMacro[terr];
                     const macroMarker = new google.maps.Marker({
                         position: { lat: data.latSum / data.count, lng: data.lngSum / data.count },
-                        label: { 
-                            text: terr, 
-                            color: 'black', 
-                            fontWeight: '900', 
-                            fontSize: '34px', 
-                            className: 'map-label-macro' 
-                        },
+                        label: { text: terr, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' },
                         icon: { url: "", scaledSize: new google.maps.Size(0,0) }
                     });
                     marcadoresMacro.push(macroMarker);
                 });
 
-                // 4. VIGILANTE DE ZOOM
                 map.addListener('zoom_changed', () => {
                     const zoom = map.getZoom();
                     if (zoom >= 15.5) {
@@ -187,17 +199,14 @@ onAuthStateChanged(auth, async (user) => {
                     }
                 });
 
-                // 5. ENFOCAR
                 if (contador > 0) {
                     map.fitBounds(bounds);
-                    google.maps.event.trigger(map, 'zoom_changed'); // Forzar chequeo inicial
+                    google.maps.event.trigger(map, 'zoom_changed'); 
                 }
 
                 if (msgElement) {
                     msgElement.innerText = `¡Éxito! ${contador} zonas sincronizadas.`;
-                    setTimeout(() => {
-                        msgElement.style.display = 'none';
-                    }, 3000);
+                    setTimeout(() => { msgElement.style.display = 'none'; }, 3000);
                 }
             };
 
