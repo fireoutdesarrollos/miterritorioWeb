@@ -130,10 +130,24 @@ onAuthStateChanged(auth, async (user) => {
                         </div>
                     `;
                     
-                    // Acción al tocar la tarjeta (Próximo paso: abrir formulario)
+                                        // Acción al tocar la tarjeta: Abrir el Modal
                     card.onclick = () => {
-                        alert("Próximamente abriremos la ficha de edición de: " + nombreMostrar);
+                        // 1. Llenamos el HTML con los datos de esta visita
+                        document.getElementById('ficha-nombre').value = visita.nombre !== 'Nueva' ? visita.nombre : '';
+                        document.getElementById('ficha-apellido').value = visita.apellido !== 'Visita' ? visita.apellido : '';
+                        document.getElementById('ficha-terr').innerText = visita.territorio || '-';
+                        document.getElementById('ficha-manz').innerText = visita.poligono || '-';
+                        document.getElementById('ficha-estado').value = visita.estado || 'Nueva';
+                        document.getElementById('ficha-direccion').value = visita.direccion || '';
+                        document.getElementById('ficha-notas').value = visita.notas || '';
+                        document.getElementById('ficha-publi').value = visita.publicacionDejada || '';
+                        document.getElementById('ficha-video').value = visita.videoVisto || '';
+                        document.getElementById('ficha-proximo').value = visita.proximoPaso || '';
+
+                        // 2. Mostramos el modal
+                        document.getElementById('ficha-modal').style.display = 'flex';
                     };
+
                     visitasContainer.appendChild(card);
                 });
             };

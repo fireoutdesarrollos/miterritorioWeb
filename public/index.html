@@ -72,6 +72,83 @@
             </div>
         </div>
     </div>
+        <div id="ficha-modal" class="modal-overlay" style="display: none;">
+        <div class="ficha-header">
+            <span id="btn-cerrar-ficha" style="font-size: 24px; cursor: pointer;">✕</span>
+            <h2 style="margin: 0; font-size: 20px;">Detalles de la Visita</h2>
+            <span id="btn-guardar-ficha" style="font-size: 20px; cursor: pointer;">💾</span>
+        </div>
+        
+        <div class="ficha-body">
+            <div class="form-row">
+                <div class="input-group">
+                    <label>Nombre</label>
+                    <input type="text" id="ficha-nombre">
+                </div>
+                <div class="input-group">
+                    <label>Apellido</label>
+                    <input type="text" id="ficha-apellido">
+                </div>
+            </div>
+
+            <div class="form-row" style="align-items: center;">
+                <div style="flex: 1;">
+                    <p style="margin: 0; font-size: 14px; color: gray;">Territorio: <strong id="ficha-terr" style="color: var(--text-color);"></strong></p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: gray;">Manzana: <strong id="ficha-manz" style="color: var(--text-color);"></strong></p>
+                </div>
+                <div class="input-group" style="flex: 1;">
+                    <label>Estado</label>
+                    <select id="ficha-estado">
+                        <option value="Nueva">Nueva</option>
+                        <option value="Revisita">Revisita</option>
+                        <option value="Estudio">Estudio</option>
+                        <option value="Ausente">Ausente</option>
+                        <option value="No visitar">No visitar</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>📍 Dirección</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="ficha-direccion" style="flex: 1;">
+                    <button class="btn-icon" style="width: 50px; border-radius: 12px;">🗺️</button>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>🗣️ Qué hablamos hoy</label>
+                <textarea id="ficha-notas" rows="4" placeholder="Escribe los detalles de la conversación..."></textarea>
+            </div>
+
+            <div class="input-group">
+                <label>📚 Publicación</label>
+                <select id="ficha-publi">
+                    <option value="">Ninguna</option>
+                    <option value="Tratado">Tratado</option>
+                    <option value="Folleto">Folleto</option>
+                    <option value="Revista">Revista</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label>🎬 Video</label>
+                <select id="ficha-video">
+                    <option value="">Ninguno</option>
+                    <option value="Presentación">Presentación</option>
+                    <option value="Por qué estudiar">Por qué estudiar la Biblia</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Próxima visita</label>
+                <input type="text" id="ficha-proximo" placeholder="En qué quedamos...">
+            </div>
+
+            <button class="btn-agendar" style="margin-top: 10px; margin-bottom: 30px;">📅 Agendar Revisita</button>
+        </div>
+    </div>
+
 
     <script type="module" src="app.js"></script>
 </body>
