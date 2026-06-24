@@ -12,10 +12,8 @@
 
     <div id="login-section">
         <img src="icon-192.png" alt="Logo" style="width: 100px; border-radius: 20px; margin-bottom: 20px;">
-        <h1 id="user-greeting">Bienvenido ¡Hola Gustavo! 👋</h1>
-
+        <h1 id="user-greeting">Bienvenido</h1>
         <button id="btn-login">Iniciar sesión con Google</button>
-        <button id="btn-login" onclick="window.iniciarSesionGoogle()">Iniciar sesión con Google</button>
     </div>
 
     <div id="dashboard-section" style="display: none; height: 100vh; width: 100vw;">
@@ -59,161 +57,9 @@
                         <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
                         <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
                         <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
+                        <button class="filtro-chip" data-filtro="No visitar">No visitar</button>
                     </div>
 
-                    <div id="lista-visitas-container">
-                        <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>
-                    </div>
-                </div>
-
-                <div id="servicio-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
-                    <h2 style="margin-top: 0; color: var(--text-color);">Rincón de Servicio</h2>
-                    <p style="color: gray;">Panel exclusivo para administrar los territorios de la congregación.</p>
-                </div>
-
-            </div>
-        </div>
-    </div>
-        <div id="ficha-modal" class="modal-overlay" style="display: none;">
-        <div class="ficha-header">
-            <span id="btn-cerrar-ficha" style="font-size: 24px; cursor: pointer;">✕</span>
-            <h2 style="margin: 0; font-size: 20px;">Detalles de la Visita</h2>
-            <span id="btn-guardar-ficha" style="font-size: 20px; cursor: pointer;">💾</span>
-        </div>
-        
-        <div class="ficha-body">
-            <div class="form-row">
-                <div class="input-group">
-                    <label>Nombre</label>
-                    <input type="text" id="ficha-nombre">
-                </div>
-                <div class="input-group">
-                    <label>Apellido</label>
-                    <input type="text" id="ficha-apellido">
-                </div>
-            </div>
-
-            <div class="form-row" style="align-items: center;">
-                <div style="flex: 1;">
-                    <p style="margin: 0; font-size: 14px; color: gray;">Territorio: <strong id="ficha-terr" style="color: var(--text-color);"></strong></p>
-                    <p style="margin: 5px 0 0 0; font-size: 14px; color: gray;">Manzana: <strong id="ficha-manz" style="color: var(--text-color);"></strong></p>
-                </div>
-                <div class="input-group" style="flex: 1;">
-                    <label>Estado</label>
-                    <select id="ficha-estado">
-                        <option value="Nueva">Nueva</option>
-                        <option value="Revisita">Revisita</option>
-                        <option value="Estudio">Estudio</option>
-                        <option value="Ausente">Ausente</option>
-                        <option value="No visitar">No visitar</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="input-group">
-                <label>📍 Dirección</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="ficha-direccion" style="flex: 1;">
-                    <button class="btn-icon" style="width: 50px; border-radius: 12px;">🗺️</button>
-                </div>
-            </div>
-
-            <div class="input-group">
-                <label>🗣️ Qué hablamos hoy</label>
-                <textarea id="ficha-notas" rows="4" placeholder="Escribe los detalles de la conversación..."></textarea>
-            </div>
-
-            <div class="input-group">
-                <label>📚 Publicación</label>
-                <select id="ficha-publi">
-                    <option value="">Ninguna</option>
-                    <option value="Tratado">Tratado</option>
-                    <option value="Folleto">Folleto</option>
-                    <option value="Revista">Revista</option>
-                </select>
-            </div>
-            
-            <div class="input-group">
-                <label>🎬 Video</label>
-                <select id="ficha-video">
-                    <option value="">Ninguno</option>
-                    <option value="Presentación">Presentación</option>
-                    <option value="Por qué estudiar">Por qué estudiar la Biblia</option>
-                </select>
-            </div>
-
-            <div class="input-group">
-                <label>Próxima visita</label>
-                <input type="text" id="ficha-proximo" placeholder="En qué quedamos...">
-            </div>
-
-            <button class="btn-agendar" style="margin-top: 10px; margin-bottom: 30px;">📅 Agendar Revisita</button>
-        </div>
-    </div>
-
-
-    <script type="module" src="app.js"></script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mi Territorio</title>
-    <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#a875ff">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-    <div id="login-section">
-        <img src="icon-192.png" alt="Logo" style="width: 100px; border-radius: 20px; margin-bottom: 20px;">
-        <h1 id="user-greeting">Bienvenido</h1>
-        <button id="btn-login">Iniciar sesión con Google</button>
-    </div>
-
-    <div id="dashboard-section" style="display: none; height: 100vh; width: 100vw;">
-        <div style="display: flex; flex-direction: column; height: 100%;">
-            
-            <header class="app-bar">
-                <h1 class="app-title">Cargando...</h1>
-                <div class="app-icons" style="display: flex; align-items: center;">
-                    <span class="icon-help" style="cursor: pointer; display: flex; margin-left: 20px;">
-                        <svg viewBox="0 0 24 24" fill="white" width="26px" height="26px">
-                            <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
-                        </svg>
-                    </span>
-                    <span class="icon-profile" style="cursor: pointer; display: flex; margin-left: 20px;">
-                        <svg viewBox="0 0 24 24" fill="white" width="28px" height="28px">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                        </svg>
-                    </span>
-                </div>
-            </header>
-
-            <nav class="app-tabs">
-                <button class="tab active" data-target="map-view">Mapa</button>
-                <button class="tab" data-target="visitas-view">Mis Visitas</button>
-                <button class="tab" id="tab-servicio" data-target="servicio-view" style="display: none;">Servicio</button>
-            </nav>
-
-            <div id="views-container" style="flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; background-color: var(--bg-color);">
-                
-                <div id="map-view" class="view-section map-container" style="display: flex;">
-                    <div id="map"></div>
-                    <div id="user-email" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 6px 16px; border-radius: 20px; z-index: 1000; font-size: 12px; pointer-events: none;"></div>
-                    <button class="fab-button">📋</button>
-                </div>
-
-                <div id="visitas-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
-                    <h2 style="margin-top: 0; margin-bottom: 20px; color: var(--text-color); font-size: 24px;">Mis Visitas</h2>
-                    <div class="visitas-filtros">
-                        <button class="filtro-chip active" data-filtro="Todos">Todos</button>
-                        <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
-                        <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
-                        <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
-                    </div>
                     <div id="lista-visitas-container">
                         <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>
                     </div>
@@ -309,11 +155,11 @@
             <div style="margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.12); padding-top: 20px;">
                 <label style="font-size: 13px; color: var(--primary-color); font-weight: bold; display: block; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">🗂️ Historial de Conversaciones</label>
                 <div id="historial-conversaciones-container" style="display: flex; flex-direction: column; gap: 10px;">
-                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <script type="module" src="app.js?v=100"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

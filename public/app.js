@@ -32,19 +32,23 @@ const dashboardSection = document.getElementById('dashboard-section');
 // ==========================================
 console.log("🚀 MOTOR JS VERSIÓN 100 CARGADO CORRECTAMENTE");
 
-window.iniciarSesionGoogle = async () => {
-    console.log("¡Botón presionado mediante conexión directa!");
-    const btn = document.getElementById('btn-login');
-    if (btn) btn.innerText = "Conectando con Google...";
-    
-    try {
-        await signInWithPopup(auth, provider);
-        console.log("¡Login exitoso!");
-    } catch (error) {
-        console.error("Fallo el login:", error);
-        if (btn) btn.innerText = "Error. Intentar de nuevo";
-    }
-};
+const btnLogin = document.getElementById('btn-login');
+if (btnLogin) {
+    btnLogin.addEventListener('click', async () => {
+        console.log("¡Botón presionado! Abriendo ventana de Google...");
+        btnLogin.innerText = "Conectando con Google...";
+        
+        try {
+            await signInWithPopup(auth, provider);
+            console.log("¡Login exitoso!");
+        } catch (error) {
+            console.error("Fallo el login:", error);
+            btnLogin.innerText = "Error. Intentar de nuevo";
+        }
+    });
+} else {
+    console.error("❌ ERROR: El JavaScript no encuentra ningún botón llamado 'btn-login' en tu HTML.");
+}
 
 // ==========================================
 // EL CORAZÓN DE LA APLICACIÓN
