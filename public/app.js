@@ -27,7 +27,7 @@ const provider = new GoogleAuthProvider();
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-console.log("🚀 MOTOR JS GEMELO (VERSIÓN 105 - CÓDIGO LIMPIO + MODO REGISTRO) CARGADO");
+console.log("🚀 MOTOR JS GEMELO (VERSIÓN 106 - INVENTARIO + BOTÓN ATRÁS) CARGADO");
 
 // ==========================================
 // LOGIN
@@ -41,6 +41,10 @@ window.iniciarSesionGoogle = async () => {
         if (btn) btn.innerText = "Error. Intentar de nuevo";
     }
 };
+const botonLogin = document.getElementById('btn-login');
+if (botonLogin) {
+    botonLogin.addEventListener('click', window.iniciarSesionGoogle);
+}
 
 // ==========================================
 // VARIABLES GLOBALES (MAPA Y REGISTRO)
@@ -190,6 +194,200 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('btn-registro-completo').onclick = () => guardarReporteActividad("Completo");
             document.getElementById('btn-registro-parcial').onclick = () => guardarReporteActividad("Parcial");
 
+            // ==========================================
+            // LÓGICA DEL RINCÓN DE SERVICIO
+            // ==========================================
+            const adminDashboard = document.getElementById('admin-dashboard');
+            const viewInventario = document.getElementById('admin-inventario-view');
+            const viewReportes = document.getElementById('admin-reportes-view');
+            const viewRoles = document.getElementById('admin-roles-view');
+
+            // Botones para volver al menú principal
+            document.querySelectorAll('.btn-volver-admin').forEach(btn => {
+                btn.onclick = () => {
+                    history.back(); // Delega al popstate
+                };
+            });
+
+            // A. PESTAÑA REPORTES (Historial 📋)
+            document.getElementById('btn-admin-reportes').onclick = () => {
+                history.pushState({ page: 'admin_sub' }, '', '');
+                adminDashboard.style.display = 'none';
+                viewReportes.style.display = 'block';
+                
+                const reportesRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad");
+                
+                onSnapshot(reportesRef, (snapshot) => {
+                    const listaHtml = document.getElementById('lista-reportes');
+                    listaHtml.innerHTML = '';
+                    
+                    let reportes = [];
+                    snapshot.forEach(doc => reportes.push({id: doc.id, ...doc.data()}));
+                    reportes.sort((a,b) => b.fecha - a.fecha); // Orden descendente
+                    
+                    if(reportes.length === 0) {
+                        listaHtml.innerHTML = '<p style="color:gray; text-align:center;">No hay reportes de actividad todavía.</p>';
+                        return;
+                    }
+
+                    reportes.forEach(rep => {
+                        const d = new Date(rep.fecha);
+                        const fStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} - ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+                        const colorBadge = rep.cobertura === 'Completo' ? '#388E3C' : '#E65100';
+                        const terText = rep.manzanas.join(', ');
+
+                        const card = document.createElement('div');
+                        card.className = 'admin-reporte-card';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="color:gray; font-size:13px; font-weight:bold;">${fStr}</span>
+                                <span style="background:${colorBadge}20; color:${colorBadge}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:900;">${rep.cobertura.toUpperCase()}</span>
+                            </div>
+                            <p style="margin: 10px 0 5px 0; font-weight:bold; color:var(--text-color); font-size:15px;">Manzanas: <span style="color:var(--primary-color);">${terText}</span></p>
+                            <p style="margin: 0; font-size:14px; color:gray;">👤 Por: ${rep.reportadoPor}</p>
+                            ${rep.notas ? `<div style="margin-top:10px; background:rgba(128,128,128,0.1); padding:10px; border-radius:8px; font-size:13px; color:var(--text-color, #444);">📝 ${rep.notas}</div>` : ''}                        
+                        `;
+                        listaHtml.appendChild(card);
+                    });
+                });
+            };
+
+            // B. GESTIÓN DE TERRITORIOS (Inventario)
+            let seleccionadosInventario = new Set();
+            let mapasEstadoGlobal = {};
+
+            document.getElementById('btn-admin-inventario').onclick = () => {
+                history.pushState({ page: 'admin_sub' }, '', '');
+                adminDashboard.style.display = 'none'; 
+                viewInventario.style.display = 'block';
+                document.getElementById('barra-accion-inventario').style.display = 'flex';
+                seleccionadosInventario.clear();
+                actualizarBarraInventario();
+
+                // Extraer manzanas del mapa
+                let manzanasUnicas = new Set();
+                if(window.mapaGlobal) {
+                    window.mapaGlobal.data.forEach(f => {
+                        const t = f.getProperty('territorio'); const m = f.getProperty('numero');
+                        if(t && m && m.toLowerCase() !== 'plaza') manzanasUnicas.add(`T${t} - ${m}`);
+                    });
+                }
+                const listaManzanas = Array.from(manzanasUnicas).sort((a,b) => a.localeCompare(b, undefined, {numeric: true}));
+
+                const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
+                onSnapshot(gestionRef, (snapshot) => {
+                    mapasEstadoGlobal = {};
+                    snapshot.forEach(doc => mapasEstadoGlobal[doc.id] = doc.data());
+                    
+                    const listaHtml = document.getElementById('lista-inventario');
+                    listaHtml.innerHTML = '';
+
+                    listaManzanas.forEach(manzanaId => {
+                        const gestion = mapasEstadoGlobal[manzanaId] || { estaDisponible: true };
+                        
+                        let badgeHtml = `<span class="badge-libre">LIBRE</span>`;
+                        let infoHtml = ``;
+                        let estaVencido = false;
+
+                        if (!gestion.estaDisponible && gestion.fecha) {
+                            const fechaVencimiento = new Date(gestion.fecha);
+                            fechaVencimiento.setMonth(fechaVencimiento.getMonth() + (gestion.duracionMeses || 4));
+                            
+                            const hoy = new Date();
+                            const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+                            
+                            if (diasRestantes < 0) {
+                                estaVencido = true;
+                                badgeHtml = `<span class="badge-vencido">VENCIDO</span>`;
+                                infoHtml = `<p>👤 ${gestion.asignadoA}</p><p style="color:#C62828; font-weight:bold;">⚠️ Vencido hace ${Math.abs(diasRestantes)} días</p>`;
+                            } else {
+                                badgeHtml = `<span class="badge-asignado">ASIGNADO</span>`;
+                                infoHtml = `<p>👤 ${gestion.asignadoA}</p><p style="color:var(--primary-color);">Faltan ${diasRestantes} días</p>`;
+                            }
+                        }
+
+                        const div = document.createElement('div');
+                        div.className = 'inventario-item';
+                        div.innerHTML = `
+                            <input type="checkbox" value="${manzanaId}" ${seleccionadosInventario.has(manzanaId) ? 'checked' : ''}>
+                            <div class="inventario-info">
+                                <h4>Manzana ${manzanaId} ${badgeHtml}</h4>
+                                ${infoHtml}
+                            </div>
+                        `;
+                        
+                        const checkbox = div.querySelector('input');
+                        div.onclick = (e) => {
+                            if(e.target !== checkbox) checkbox.checked = !checkbox.checked;
+                            if (checkbox.checked) seleccionadosInventario.add(manzanaId);
+                            else seleccionadosInventario.delete(manzanaId);
+                            actualizarBarraInventario();
+                        };
+                        
+                        listaHtml.appendChild(div);
+                    });
+                });
+            };
+
+            function actualizarBarraInventario() {
+                document.getElementById('contador-inventario').innerText = seleccionadosInventario.size;
+                const btnAsignar = document.getElementById('btn-asignar-mapas');
+                const btnRecibir = document.getElementById('btn-recibir-mapas');
+                
+                if (seleccionadosInventario.size === 0) {
+                    btnAsignar.disabled = true; btnRecibir.style.display = 'none'; btnAsignar.style.display = 'block';
+                    return;
+                }
+                
+                let todosLibres = true;
+                seleccionadosInventario.forEach(id => {
+                    if (mapasEstadoGlobal[id] && !mapasEstadoGlobal[id].estaDisponible) todosLibres = false;
+                });
+
+                if (todosLibres) {
+                    btnAsignar.style.display = 'block'; btnAsignar.disabled = false; btnRecibir.style.display = 'none';
+                } else {
+                    btnAsignar.style.display = 'none'; btnRecibir.style.display = 'block';
+                }
+            }
+
+            document.getElementById('btn-recibir-mapas').onclick = () => {
+                seleccionadosInventario.forEach(async (id) => {
+                    await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas", id), { estaDisponible: true });
+                });
+                seleccionadosInventario.clear(); actualizarBarraInventario();
+            };
+
+            document.getElementById('btn-asignar-mapas').onclick = () => {
+                history.pushState({ page: 'modal_asignar' }, '', '');
+                document.getElementById('asignar-text').innerText = `Vas a asignar ${seleccionadosInventario.size} manzanas.`;
+                document.getElementById('asignar-modal').style.display = 'flex';
+            };
+
+            document.getElementById('btn-cancelar-asignar').onclick = () => history.back();
+
+            document.getElementById('btn-confirmar-asignar').onclick = () => {
+                const nombre = document.getElementById('asignar-nombre').value.trim();
+                const meses = parseInt(document.getElementById('asignar-meses').value) || 4;
+                if (!nombre) return alert("Ingresa un nombre");
+
+                seleccionadosInventario.forEach(async (id) => {
+                    await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas", id), {
+                        asignadoA: nombre, fecha: Date.now(), estaDisponible: false, duracionMeses: meses
+                    });
+                });
+
+                document.getElementById('asignar-nombre').value = '';
+                seleccionadosInventario.clear();
+                actualizarBarraInventario();
+                history.back(); 
+            };
+
+            document.getElementById('btn-admin-roles').onclick = () => {
+                history.pushState({ page: 'admin_sub' }, '', '');
+                adminDashboard.style.display = 'none'; viewRoles.style.display = 'block';
+                document.getElementById('lista-roles').innerHTML = '<p style="color:gray; text-align:center; margin-top:20px;">En construcción para el próximo paso 🏗️...</p>';
+            };
 
             // ==========================================
             // CARGA DE CONFIGURACIÓN Y VISITAS
@@ -310,6 +508,7 @@ onAuthStateChanged(auth, async (user) => {
             };
 
             function abrirFichaVisita(visita) {
+                history.pushState({ page: 'modal_ficha' }, '', '');
                 window.miUsuario.visitaActivaId = visita.id;
                 window.miUsuario.visitaActivaNotas = visita.notas || "";
                 window.miUsuario.tempLat = visita.latitud || 0;
@@ -421,8 +620,7 @@ onAuthStateChanged(auth, async (user) => {
                         timestamp: Date.now()
                     }, { merge: true });
 
-                    const modal = document.getElementById('ficha-modal');
-                    if (modal) modal.style.display = 'none';
+                    history.back(); // Cierra el modal y actualiza el historial
                 };
             }
 
@@ -565,6 +763,7 @@ const views = document.querySelectorAll('.view-section');
 
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
+        history.pushState({ page: 'tab' }, '', '');
         tabs.forEach(t => t.classList.remove('active')); 
         views.forEach(v => v.style.display = 'none');
         
@@ -580,10 +779,46 @@ tabs.forEach(tab => {
     });
 });
 
-const btnCerrarFicha = document.getElementById('btn-cerrar-ficha');
-if (btnCerrarFicha) {
-    btnCerrarFicha.onclick = () => {
-        const modal = document.getElementById('ficha-modal');
-        if (modal) modal.style.display = 'none';
+if (document.getElementById('btn-cerrar-ficha')) {
+    document.getElementById('btn-cerrar-ficha').onclick = () => {
+        history.back();
     };
 }
+
+// ==========================================
+// INTERCEPCIÓN DEL BOTÓN "ATRÁS" (HISTORY API)
+// ==========================================
+window.addEventListener('popstate', (e) => {
+    const modalFicha = document.getElementById('ficha-modal');
+    const modalAsignar = document.getElementById('asignar-modal');
+    const barraInventario = document.getElementById('barra-accion-inventario');
+    const adminDashboard = document.getElementById('admin-dashboard');
+    const viewInventario = document.getElementById('admin-inventario-view');
+    const viewReportes = document.getElementById('admin-reportes-view');
+    const viewRoles = document.getElementById('admin-roles-view');
+    
+    // 1. Prioridad Máxima: Cerrar Modales
+    if (modalFicha && modalFicha.style.display === 'flex') { modalFicha.style.display = 'none'; return; }
+    if (modalAsignar && modalAsignar.style.display === 'flex') { modalAsignar.style.display = 'none'; return; }
+
+    // 2. Prioridad Media: Cerrar sub-menús de administrador
+    if (viewInventario && viewInventario.style.display === 'block' || 
+        viewReportes && viewReportes.style.display === 'block' || 
+        viewRoles && viewRoles.style.display === 'block') {
+        if(viewInventario) viewInventario.style.display = 'none'; 
+        if(viewReportes) viewReportes.style.display = 'none'; 
+        if(viewRoles) viewRoles.style.display = 'none';
+        if(barraInventario) barraInventario.style.display = 'none';
+        if(adminDashboard) adminDashboard.style.display = 'flex';
+        return;
+    }
+
+    // 3. Prioridad Baja: Si no estamos en el mapa, volver al mapa
+    const tabMapa = document.querySelector('.tab[data-target="map-view"]');
+    if (tabMapa && !tabMapa.classList.contains('active')) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); 
+        document.querySelectorAll('.view-section').forEach(v => v.style.display = 'none');
+        tabMapa.classList.add('active'); 
+        document.getElementById('map-view').style.display = 'flex';
+    }
+});

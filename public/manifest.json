@@ -3,8 +3,8 @@
   "short_name": "Territorios",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#6200EE",
+  "background_color": "#F3F4F6",
+  "theme_color": "#a875ff",
   "icons": [
     {
       "src": "icon-192.png",

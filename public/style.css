@@ -1,4 +1,10 @@
 /* =========================================
+   RESETEO GLOBAL (La cura para los desbordes)
+   ========================================= */
+* {
+    box-sizing: border-box;
+}
+/* =========================================
    VARIABLES Y TEMAS (Claro / Oscuro)
    ========================================= */
 :root {
@@ -6,7 +12,10 @@
     --primary-dark: #2b1a3f;  
     --accent-color: #5c3b6e;  
     --bg-color: #F3F4F6;
+    --surface-color: #FFFFFF; /* NUEVO: Fondo para tarjetas en modo claro */
+    --border-color: rgba(0, 0, 0, 0.1); /* NUEVO: Borde en modo claro */
     --text-color: #1F2937;
+    --text-muted: gray; /* NUEVO: Texto secundario en modo claro */
     --tab-text-inactive: #a092b1;
     --tab-text-active: #ffffff;
     --border-radius: 12px;
@@ -18,7 +27,10 @@
         --primary-dark: #170d24;
         --accent-color: #7b5291;
         --bg-color: #121212;
+        --surface-color: #1A1A1C; /* NUEVO: Fondo gris oscuro para tarjetas */
+        --border-color: rgba(255, 255, 255, 0.08); /* NUEVO: Borde sutil en modo oscuro */
         --text-color: #E5E7EB;
+        --text-muted: #A0A0A0; /* NUEVO: Texto secundario en modo oscuro */
     }
 }
 
@@ -33,7 +45,7 @@ body, html {
 }
 
 /* =========================================
-   BOTONES GLOBALES (¡El que se había roto!)
+   BOTONES GLOBALES
    ========================================= */
 button {
     background-color: var(--primary-color);
@@ -51,33 +63,15 @@ button {
 button:active { opacity: 0.8; }
 
 /* =========================================
-   PANTALLA DE LOGIN (Única y Centrada)
+   PANTALLA DE LOGIN
    ========================================= */
 #login-section {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: var(--bg-color);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 5000;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: var(--bg-color); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 5000;
 }
-
-#login-section img {
-    width: 120px;
-    border-radius: 25px;
-    margin-bottom: 25px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
-
-#btn-login {
-    width: 80%;
-    max-width: 300px;
-}
+#login-section img { width: 120px; border-radius: 25px; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+#btn-login { width: 80%; max-width: 300px; }
 
 /* =========================================
    PANTALLA PRINCIPAL Y PESTAÑAS
@@ -87,38 +81,25 @@ button:active { opacity: 0.8; }
     justify-content: space-between; align-items: center; padding: 15px 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;
 }
-
 .app-title { margin: 0; font-size: 20px; font-weight: 500; }
-
 .app-tabs { background-color: var(--primary-dark); display: flex; justify-content: space-around; }
-
 .tab {
     background: none; border: none; color: var(--tab-text-inactive);
     padding: 15px 0; font-size: 14px; font-weight: bold; flex: 1; margin: 0;
     border-radius: 0; cursor: pointer; border-bottom: 3px solid transparent;
 }
-
 .tab.active { color: var(--tab-text-active); border-bottom: 3px solid var(--primary-color); }
-
 .view-section { flex: 1; height: 100%; width: 100%; }
 
 /* =========================================
    MAPA Y BOTÓN FLOTANTE
    ========================================= */
 .map-container { position: relative; width: 100%; height: 100%; }
-
 #map { 
-    width: 100%; 
-    height: 100%; 
-    background-color: #e5e5e5; 
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-    /* ELIMINA LA SOMBRA EN SAMSUNG/ANDROID 👇 */
-    -webkit-tap-highlight-color: transparent;
-    outline: none;
+    width: 100%; height: 100%; background-color: #e5e5e5; 
+    -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; outline: none;
 }
-
 .fab-button {
     position: absolute; bottom: 30px; left: 20px; padding: 0;
     background-color: var(--accent-color); color: white;
@@ -126,8 +107,6 @@ button:active { opacity: 0.8; }
     font-size: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     cursor: pointer; z-index: 100;
 }
-
-/* Textos del Mapa (Efecto Halo Blanco) */
 .map-label-macro { text-shadow: 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white; }
 .map-label-micro { text-shadow: 0px 0px 4px white, 0px 0px 4px white, 0px 0px 4px white; }
 
@@ -136,26 +115,24 @@ button:active { opacity: 0.8; }
    ========================================= */
 .visitas-filtros {
     display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px;
-    margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.1);
+    margin-bottom: 16px; border-bottom: 1px solid var(--border-color);
 }
 .visitas-filtros::-webkit-scrollbar { display: none; }
-
 .filtro-chip {
     background-color: #E0E0E0; color: #424242; border: 1px solid transparent;
     padding: 8px 18px; border-radius: 24px; font-size: 14px; font-weight: 600;
     white-space: nowrap; cursor: pointer; transition: all 0.2s ease; width: auto;
 }
 .filtro-chip.active { background-color: var(--primary-color); color: white; }
-
 .visita-card {
-    background-color: white; border-radius: 16px; padding: 16px 20px;
+    background-color: var(--surface-color); border-radius: 16px; padding: 16px 20px;
     margin-bottom: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.04);
-    display: flex; align-items: center; cursor: pointer; border: 1px solid rgba(0,0,0,0.03);
+    display: flex; align-items: center; cursor: pointer; border: 1px solid var(--border-color);
 }
 .visita-card:active { opacity: 0.7; }
 .visita-color { width: 16px; height: 16px; border-radius: 50%; margin-right: 18px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .visita-info h3 { margin: 0 0 6px 0; font-size: 17px; color: var(--text-color); font-weight: 700; }
-.visita-info p { margin: 0; font-size: 13px; color: #757575; font-weight: 500; }
+.visita-info p { margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
 
 /* =========================================
    FICHA DE VISITA (Modal Formulario)
@@ -179,15 +156,68 @@ button:active { opacity: 0.8; }
 .chat-meta { font-size: 11px; color: #666666; margin-top: 6px; align-self: flex-end; font-weight: 500; }
 
 /* =========================================
+   RINCÓN DE SERVICIO (ADMIN) - AHORA SÍ ADAPTABLE
+   ========================================= */
+.admin-card {
+    background-color: var(--surface-color); 
+    border: 1px solid var(--border-color);
+    border-radius: 20px; 
+    padding: 20px 16px; 
+    display: flex; 
+    align-items: center; 
+    gap: 16px;
+    cursor: pointer; 
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+}
+.admin-card:active { 
+    transform: scale(0.97); 
+    background-color: rgba(0,0,0,0.02);
+}
+.admin-card .admin-icon {
+    background-color: var(--primary-color); 
+    width: 56px; height: 56px; border-radius: 50%; display: flex; 
+    align-items: center; justify-content: center; flex-shrink: 0;
+}
+.admin-card-text { display: flex; flex-direction: column; gap: 6px; }
+.admin-card-text h3 { margin: 0; font-size: 17px; color: var(--text-color); font-weight: 700; letter-spacing: 0.3px; }
+.admin-card-text p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+
+.btn-volver-admin { background: none; border: none; color: var(--primary-color); font-weight: bold; font-size: 15px; padding: 0; cursor: pointer; margin-bottom: 20px; display: flex; align-items: center; gap: 5px; }
+
+/* Tarjetas de los reportes internos */
+.admin-reporte-card {
+    background-color: var(--surface-color); 
+    border: 1px solid var(--border-color);
+    border-radius: 16px; padding: 16px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+/* =========================================
    AJUSTES EXCLUSIVOS PARA MODO OSCURO
    ========================================= */
 @media (prefers-color-scheme: dark) {
-    .visitas-filtros { border-bottom: 1px solid rgba(255,255,255,0.1); }
     .filtro-chip { background-color: #2C2C2C; color: #E0E0E0; border: 1px solid #404040; }
-    .visita-card { background-color: #160D24; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .visita-info p { color: #A0A0A0; }
+    .visita-card { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     .input-group input, .input-group select, .input-group textarea { border-color: #555; }
     .btn-agendar { background-color: #333; color: white; }
     .chat-bubble { background-color: #054735; color: #E2E8F0; }
     .chat-meta { color: #94A3B8; }
+    .admin-card { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .admin-card:active { background-color: rgba(255,255,255,0.05); }
 }
+/* =========================================
+   INVENTARIO DE MAPAS
+   ========================================= */
+.inventario-item {
+    background: var(--surface-color); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;
+}
+.inventario-item input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary-color); }
+.inventario-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.inventario-info h4 { margin: 0; color: var(--text-color); font-size: 16px; display: flex; justify-content: space-between; align-items: center;}
+.inventario-info p { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+.badge-libre { background: #E8F5E9; color: #2E7D32; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
+.badge-asignado { background: #FFF3E0; color: #E65100; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
+.badge-vencido { background: #FFEBEE; color: #C62828; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
