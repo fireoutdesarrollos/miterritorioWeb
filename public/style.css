@@ -1,11 +1,10 @@
 /* =========================================
-   VARIABLES Y TEMAS (Claro / Oscuro Dinámico)
+   VARIABLES Y TEMAS (Claro / Oscuro)
    ========================================= */
 :root {
-    /* Tema Claro (Por defecto) */
-    --primary-color: #a875ff; /* Morado de tu barra superior */
-    --primary-dark: #2b1a3f;  /* Morado oscuro de las pestañas */
-    --accent-color: #5c3b6e;  /* Color del botón flotante */
+    --primary-color: #a875ff; 
+    --primary-dark: #2b1a3f;  
+    --accent-color: #5c3b6e;  
     --bg-color: #F3F4F6;
     --text-color: #1F2937;
     --tab-text-inactive: #a092b1;
@@ -15,8 +14,7 @@
 
 @media (prefers-color-scheme: dark) {
     :root {
-        /* Tema Oscuro (Se activa solo si el celular está en modo oscuro) */
-        --primary-color: #8a57e3; /* Un poco más apagado para no encandilar */
+        --primary-color: #8a57e3; 
         --primary-dark: #170d24;
         --accent-color: #7b5291;
         --bg-color: #121212;
@@ -24,9 +22,6 @@
     }
 }
 
-/* =========================================
-   RESETEO Y BASE (Adiós márgenes blancos)
-   ========================================= */
 body, html {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
@@ -34,18 +29,36 @@ body, html {
     margin: 0;
     padding: 0;
     height: 100%;
-    overflow: hidden; /* Evita que la pantalla se deslice como página web */
+    overflow: hidden; 
 }
 
 /* =========================================
-   PANTALLA DE LOGIN (Centrada y Única)
+   BOTONES GLOBALES (¡El que se había roto!)
+   ========================================= */
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    font-size: 1.1rem;
+    border-radius: var(--border-radius);
+    width: 100%;
+    cursor: pointer;
+    font-weight: bold;
+    transition: opacity 0.2s;
+}
+
+button:active { opacity: 0.8; }
+
+/* =========================================
+   PANTALLA DE LOGIN (Única y Centrada)
    ========================================= */
 #login-section {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background-color: var(--bg-color);
     display: flex;
     flex-direction: column;
@@ -67,267 +80,103 @@ body, html {
 }
 
 /* =========================================
-   PANTALLA PRINCIPAL (Estilo App Nativa)
+   PANTALLA PRINCIPAL Y PESTAÑAS
    ========================================= */
-#dashboard-section {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-}
-
-/* Barra Superior */
 .app-bar {
-    background-color: var(--primary-color);
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    z-index: 10;
+    background-color: var(--primary-color); color: white; display: flex;
+    justify-content: space-between; align-items: center; padding: 15px 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;
 }
 
-.app-title {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 500;
-}
+.app-title { margin: 0; font-size: 20px; font-weight: 500; }
 
-.app-icons span {
-    margin-left: 15px;
-    font-size: 20px;
-    cursor: pointer;
-}
-
-/* Pestañas */
-.app-tabs {
-    background-color: var(--primary-dark);
-    display: flex;
-    justify-content: space-around;
-}
+.app-tabs { background-color: var(--primary-dark); display: flex; justify-content: space-around; }
 
 .tab {
-    background: none;
-    border: none;
-    color: var(--tab-text-inactive);
-    padding: 15px 0;
-    margin-top: 0;
-    font-size: 14px;
-    font-weight: bold;
-    flex: 1;
-    border-radius: 0;
-    cursor: pointer;
-    border-bottom: 3px solid transparent;
+    background: none; border: none; color: var(--tab-text-inactive);
+    padding: 15px 0; font-size: 14px; font-weight: bold; flex: 1; margin: 0;
+    border-radius: 0; cursor: pointer; border-bottom: 3px solid transparent;
 }
 
-.tab.active {
-    color: var(--tab-text-active);
-    border-bottom: 3px solid var(--primary-color);
-}
+.tab.active { color: var(--tab-text-active); border-bottom: 3px solid var(--primary-color); }
+
+.view-section { flex: 1; height: 100%; width: 100%; }
 
 /* =========================================
-   EL MAPA (Pantalla Completa)
+   MAPA Y BOTÓN FLOTANTE
    ========================================= */
-.map-container {
-    flex: 1; /* Ocupa todo el alto sobrante */
-    position: relative;
-    width: 100%;
-}
+.map-container { position: relative; width: 100%; height: 100%; }
+#map { width: 100%; height: 100%; background-color: #e5e5e5; }
 
-#map {
-    width: 100%;
-    height: 100%;
-    background-color: #e5e5e5;
-    /* Eliminamos bordes y márgenes para que sea edge-to-edge */
-}
-
-/* Botón Flotante (FAB) */
 .fab-button {
-    position: absolute;
-    bottom: 30px;
-    left: 20px;
-    background-color: var(--accent-color);
-    color: white;
-    border: none;
-    border-radius: 15px;
-    width: 60px;
-    height: 60px;
-    font-size: 24px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    cursor: pointer;
-    z-index: 100;
-    margin-top: 0;
-}
-/* =========================================
-   TEXTOS DEL MAPA (Efecto Halo Blanco)
-   ========================================= */
-.map-label-macro {
-    text-shadow: 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white;
-    /* Esto simula el blurRadius=25f de Android */
+    position: absolute; bottom: 30px; left: 20px; padding: 0;
+    background-color: var(--accent-color); color: white;
+    border: none; border-radius: 15px; width: 60px; height: 60px;
+    font-size: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    cursor: pointer; z-index: 100;
 }
 
-.map-label-micro {
-    text-shadow: 0px 0px 4px white, 0px 0px 4px white, 0px 0px 4px white;
-}
+/* Textos del Mapa (Efecto Halo Blanco) */
+.map-label-macro { text-shadow: 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white; }
+.map-label-micro { text-shadow: 0px 0px 4px white, 0px 0px 4px white, 0px 0px 4px white; }
+
 /* =========================================
-   MIS VISITAS (Tarjetas y Filtros Premium)
+   MIS VISITAS (Tarjetas y Filtros)
    ========================================= */
 .visitas-filtros {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    padding-bottom: 16px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid rgba(0,0,0,0.1); /* Línea separadora sutil */
+    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px;
+    margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.1);
 }
-
-/* Ocultar barra de scroll en los filtros */
 .visitas-filtros::-webkit-scrollbar { display: none; }
 
 .filtro-chip {
-    background-color: #E0E0E0;
-    color: #424242;
-    border: 1px solid transparent;
-    padding: 8px 18px;
-    border-radius: 24px;
-    font-size: 14px;
-    font-weight: 600;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    background-color: #E0E0E0; color: #424242; border: 1px solid transparent;
+    padding: 8px 18px; border-radius: 24px; font-size: 14px; font-weight: 600;
+    white-space: nowrap; cursor: pointer; transition: all 0.2s ease; width: auto;
 }
-
-.filtro-chip.active {
-    background-color: var(--primary-color);
-    color: white;
-}
+.filtro-chip.active { background-color: var(--primary-color); color: white; }
 
 .visita-card {
-    background-color: white;
-    border-radius: 16px; /* Más redondeado, estilo app moderna */
-    padding: 16px 20px;
-    margin-bottom: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.04);
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    border: 1px solid rgba(0,0,0,0.03);
+    background-color: white; border-radius: 16px; padding: 16px 20px;
+    margin-bottom: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+    display: flex; align-items: center; cursor: pointer; border: 1px solid rgba(0,0,0,0.03);
 }
-
-.visita-card:active {
-    opacity: 0.7; /* Efecto al tocar la tarjeta */
-}
-
-.visita-color {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    margin-right: 18px;
-    flex-shrink: 0;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
+.visita-card:active { opacity: 0.7; }
+.visita-color { width: 16px; height: 16px; border-radius: 50%; margin-right: 18px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .visita-info h3 { margin: 0 0 6px 0; font-size: 17px; color: var(--text-color); font-weight: 700; }
 .visita-info p { margin: 0; font-size: 13px; color: #757575; font-weight: 500; }
 
-/* --- Ajustes exclusivos para el MODO OSCURO --- */
-@media (prefers-color-scheme: dark) {
-    .visitas-filtros { border-bottom: 1px solid rgba(255,255,255,0.1); }
-    
-    .filtro-chip { 
-        background-color: #2C2C2C; 
-        color: #E0E0E0; 
-        border: 1px solid #404040; 
-    }
-    
-    .visita-card { 
-        background-color: #160D24; /* Un morado súper oscuro y elegante */
-        border: 1px solid rgba(255,255,255,0.05);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    
-    .visita-info p { color: #A0A0A0; }
-}
 /* =========================================
    FICHA DE VISITA (Modal Formulario)
    ========================================= */
-.modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background-color: var(--bg-color);
-    z-index: 2000; flex-direction: column;
-}
-
-.ficha-header {
-    background-color: var(--primary-color); color: white;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 16px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.ficha-body {
-    padding: 20px; overflow-y: auto; flex: 1;
-}
-
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--bg-color); z-index: 2000; flex-direction: column; }
+.ficha-header { background-color: var(--primary-color); color: white; display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.ficha-body { padding: 20px; overflow-y: auto; flex: 1; }
 .form-row { display: flex; gap: 15px; margin-bottom: 15px; }
-
 .input-group { margin-bottom: 15px; display: flex; flex-direction: column; flex: 1; }
 .input-group label { font-size: 13px; color: var(--primary-color); font-weight: bold; margin-bottom: 5px; }
-.input-group input, .input-group select, .input-group textarea {
-    background-color: transparent;
-    border: 1px solid gray;
-    border-radius: 8px;
-    padding: 12px;
-    color: var(--text-color);
-    font-family: inherit;
-    font-size: 15px;
-}
-.input-group input:focus, .input-group textarea:focus, .input-group select:focus {
-    border-color: var(--primary-color); outline: none; border-width: 2px;
-}
-
+.input-group input, .input-group select, .input-group textarea { background-color: transparent; border: 1px solid gray; border-radius: 8px; padding: 12px; color: var(--text-color); font-family: inherit; font-size: 15px; }
+.input-group input:focus, .input-group textarea:focus, .input-group select:focus { border-color: var(--primary-color); outline: none; border-width: 2px; }
 .btn-icon { background-color: var(--primary-color); color: white; border: none; display: flex; align-items: center; justify-content: center; margin: 0; }
 .btn-agendar { background-color: #E0E0E0; color: black; border-radius: 20px; width: 100%; }
 
+/* =========================================
+   HISTORIAL DE CONVERSACIONES (Globos)
+   ========================================= */
+.chat-bubble { background-color: #DCF8C6; color: #303030; padding: 12px 16px; border-radius: 16px 16px 16px 0px; max-width: 85%; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.12); display: flex; flex-direction: column; box-sizing: border-box; }
+.chat-text { font-size: 14.5px; line-height: 1.4; white-space: pre-wrap; margin-bottom: 0; }
+.chat-meta { font-size: 11px; color: #666666; margin-top: 6px; align-self: flex-end; font-weight: 500; }
+
+/* =========================================
+   AJUSTES EXCLUSIVOS PARA MODO OSCURO
+   ========================================= */
 @media (prefers-color-scheme: dark) {
+    .visitas-filtros { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .filtro-chip { background-color: #2C2C2C; color: #E0E0E0; border: 1px solid #404040; }
+    .visita-card { background-color: #160D24; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .visita-info p { color: #A0A0A0; }
     .input-group input, .input-group select, .input-group textarea { border-color: #555; }
     .btn-agendar { background-color: #333; color: white; }
-}
-/* =========================================
-   HISTORIAL DE CONVERSACIONES (WhatsApp Style)
-   ========================================= */
-.chat-bubble {
-    background-color: #DCF8C6; /* Verde claro de WhatsApp */
-    color: #303030;
-    padding: 12px 16px;
-    border-radius: 16px 16px 16px 0px; /* Esquina inferior izquierda recta */
-    max-width: 85%;
-    align-self: flex-start;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
-}
-
-.chat-text {
-    font-size: 14.5px;
-    line-height: 1.4;
-    white-space: pre-wrap; /* Mantiene saltos de línea del texto */
-}
-
-.chat-meta {
-    font-size: 11px;
-    color: #666666;
-    margin-top: 6px;
-    align-self: flex-end;
-    font-weight: 500;
-}
-
-/* Ajustes automáticos para el MODO OSCURO */
-@media (prefers-color-scheme: dark) {
-    .chat-bubble {
-        background-color: #054735; /* Verde oscuro oficial de WhatsApp Dark */
-        color: #E2E8F0;
-    }
-    .chat-meta {
-        color: #94A3B8;
-    }
+    .chat-bubble { background-color: #054735; color: #E2E8F0; }
+    .chat-meta { color: #94A3B8; }
 }
