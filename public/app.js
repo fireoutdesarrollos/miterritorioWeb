@@ -1,6 +1,6 @@
-// 1. IMPORTACIONES DE FIREBASE
+// 1. IMPORTACIONES DE FIREBASE (¡Ahora con signInWithPopup!)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 if ('serviceWorker' in navigator) {
@@ -26,12 +26,23 @@ const btnLogin = document.getElementById('btn-login');
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
+// NUEVO MOTOR DE LOGIN (Más seguro y visible)
 if (btnLogin) {
-    btnLogin.addEventListener('click', () => { signInWithRedirect(auth, provider); });
+    btnLogin.addEventListener('click', async () => {
+        console.log("¡Botón clickeado! Abriendo Google...");
+        btnLogin.innerText = "Conectando..."; // Te avisa que está trabajando
+        try {
+            await signInWithPopup(auth, provider);
+            console.log("¡Login exitoso!");
+        } catch (error) {
+            console.error("Error al iniciar sesión:", error);
+            btnLogin.innerText = "Error. Intentar de nuevo";
+            alert("No se pudo iniciar sesión. Revisá la consola.");
+        }
+    });
 }
 
-getRedirectResult(auth).catch((error) => console.error(error));
-
+// 4. EL CORAZÓN DE LA APLICACIÓN
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         if (loginSection) loginSection.style.display = 'none';
@@ -51,24 +62,17 @@ onAuthStateChanged(auth, async (user) => {
             const congSnap = await getDoc(congRef);
             if (congSnap.exists()) {
                 const congData = congSnap.data();
-                
-                // ESCUDO DEFENSIVO PARA EL TÍTULO
                 const appTitleEl = document.querySelector('.app-title');
-                if (appTitleEl) {
-                    appTitleEl.innerText = congData.nombre || `Congregación ${miCongregacionId}`;
-                }
-
+                if (appTitleEl) appTitleEl.innerText = congData.nombre || `Congregación ${miCongregacionId}`;
                 if (congData.roles && congData.roles[email]) miRol = congData.roles[email];
             }
             
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "" };
 
             const tabServicio = document.getElementById('tab-servicio');
-            if (tabServicio) {
-                tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
-            }
+            if (tabServicio) tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
 
-            // CARGAR PUBLICACIONES DINÁMICAS (Con escudos)
+            // CARGAR PUBLICACIONES DINÁMICAS
             const ministerioRef = doc(db, "configuracion", "ministerio");
             const ministerioSnap = await getDoc(ministerioRef);
             if (ministerioSnap.exists()) {
@@ -102,10 +106,9 @@ onAuthStateChanged(auth, async (user) => {
                 renderizarVisitas();
             });
 
-            // EL TRADUCTOR REPARADO Y BLINDADO
             function pintarGlobosHistorial(notasString) {
                 const chatContainer = document.getElementById('historial-conversaciones-container');
-                if (!chatContainer) return; // Escudo
+                if (!chatContainer) return; 
 
                 chatContainer.innerHTML = '';
                 
@@ -132,7 +135,6 @@ onAuthStateChanged(auth, async (user) => {
                     }
 
                     const textoLimpio = cuerpoTexto.replace(/\/\//g, '<br><br>• ');
-
                     const globo = document.createElement('div');
                     globo.className = 'chat-bubble';
                     globo.innerHTML = `<div class="chat-text">${textoLimpio}</div><div class="chat-meta">📅 ${fechaStr}</div>`;
@@ -169,7 +171,6 @@ onAuthStateChanged(auth, async (user) => {
                         window.miUsuario.visitaActivaId = visita.id;
                         window.miUsuario.visitaActivaNotas = visita.notas || "";
 
-                        // Escudos para todos los campos de la ficha
                         const fn = document.getElementById('ficha-nombre'); if (fn) fn.value = visita.nombre !== 'Nueva' ? visita.nombre : '';
                         const fa = document.getElementById('ficha-apellido'); if (fa) fa.value = visita.apellido !== 'Visita' ? visita.apellido : '';
                         const ft = document.getElementById('ficha-terr'); if (ft) ft.innerText = visita.territorio || '-';
@@ -182,7 +183,6 @@ onAuthStateChanged(auth, async (user) => {
                         const fno = document.getElementById('ficha-notas'); if (fno) fno.value = ''; 
 
                         pintarGlobosHistorial(visita.notas); 
-                        
                         const modal = document.getElementById('ficha-modal');
                         if (modal) modal.style.display = 'flex';
                     };
@@ -258,7 +258,7 @@ onAuthStateChanged(auth, async (user) => {
                 scriptMapa.async = true;
                 scriptMapa.onload = async () => {
                     const mapEl = document.getElementById("map");
-                    if (!mapEl) return; // Escudo final
+                    if (!mapEl) return; 
 
                     const map = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
                     map.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
@@ -304,6 +304,7 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         if (loginSection) loginSection.style.display = 'flex'; 
         if (dashboardSection) dashboardSection.style.display = 'none';
+        if (btnLogin) btnLogin.innerText = "Iniciar sesión con Google"; // Reseteamos el botón si se cierra la sesión
     }
 });
 
