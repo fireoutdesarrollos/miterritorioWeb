@@ -1,14 +1,12 @@
 // 1. IMPORTACIONES DE FIREBASE
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-// 2. SERVICE WORKER
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.error(err)));
 }
 
-// 3. CONFIGURACIÓN FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyALd_mItZYSLluocbxI8EUPle18UE4-8NQ",
   authDomain: "territorios-a3ba5.firebaseapp.com",
@@ -27,32 +25,41 @@ const provider = new GoogleAuthProvider();
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-// ==========================================
 // CONFIRMACIÓN Y MOTOR DE LOGIN DIRECTO
-// ==========================================
-console.log("🚀 MOTOR JS VERSIÓN 100 CARGADO CORRECTAMENTE");
+console.log("🚀 MOTOR JS GEMELO (VERSIÓN 101) CARGADO");
 
-const btnLogin = document.getElementById('btn-login');
-if (btnLogin) {
-    btnLogin.addEventListener('click', async () => {
-        console.log("¡Botón presionado! Abriendo ventana de Google...");
-        btnLogin.innerText = "Conectando con Google...";
-        
-        try {
-            await signInWithPopup(auth, provider);
-            console.log("¡Login exitoso!");
-        } catch (error) {
-            console.error("Fallo el login:", error);
-            btnLogin.innerText = "Error. Intentar de nuevo";
-        }
-    });
-} else {
-    console.error("❌ ERROR: El JavaScript no encuentra ningún botón llamado 'btn-login' en tu HTML.");
+window.iniciarSesionGoogle = async () => {
+    const btn = document.getElementById('btn-login');
+    if (btn) btn.innerText = "Conectando con Google...";
+    try {
+        await signInWithPopup(auth, provider);
+    } catch (error) {
+        if (btn) btn.innerText = "Error. Intentar de nuevo";
+    }
+};
+
+// VARIABLES GLOBALES DEL MAPA
+window.mapaGlobal = null;
+window.pinesVisitas = [];
+
+// FUNCIONES DE COLORES (Traducción de tu Kotlin)
+function obtenerColorPin(estado) {
+    let color = '#E65100'; // Naranja (Otro)
+    if (estado === 'Nueva') color = '#0288D1'; 
+    if (estado === 'Ausente') color = '#D32F2F'; 
+    if (estado === 'Revisita') color = '#388E3C'; 
+    if (estado === 'Estudio') color = '#FBC02D'; 
+    if (estado === 'No visitar') color = '#7B1FA2'; 
+    return {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: color,
+        fillOpacity: 1,
+        strokeColor: 'white',
+        strokeWeight: 2,
+        scale: 8
+    };
 }
 
-// ==========================================
-// EL CORAZÓN DE LA APLICACIÓN
-// ==========================================
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         if (loginSection) loginSection.style.display = 'none';
@@ -77,7 +84,8 @@ onAuthStateChanged(auth, async (user) => {
                 if (congData.roles && congData.roles[email]) miRol = congData.roles[email];
             }
             
-            window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "" };
+            // Agregamos lat y lng a la variable temporal para cuando creemos una visita
+            window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "", tempLat: 0, tempLng: 0 };
 
             const tabServicio = document.getElementById('tab-servicio');
             if (tabServicio) tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
@@ -93,12 +101,8 @@ onAuthStateChanged(auth, async (user) => {
                 if (selectPubli) selectPubli.innerHTML = '<option value="">Ninguna</option>';
                 if (selectVideo) selectVideo.innerHTML = '<option value="">Ninguno</option>';
                 
-                if (dataMin.publicaciones && selectPubli) {
-                    dataMin.publicaciones.forEach(pub => { const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); });
-                }
-                if (dataMin.videos && selectVideo) {
-                    dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
-                }
+                if (dataMin.publicaciones && selectPubli) dataMin.publicaciones.forEach(pub => { const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); });
+                if (dataMin.videos && selectVideo) dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
             }
 
             // MOTOR DE VISITAS
@@ -119,7 +123,6 @@ onAuthStateChanged(auth, async (user) => {
             function pintarGlobosHistorial(notasString) {
                 const chatContainer = document.getElementById('historial-conversaciones-container');
                 if (!chatContainer) return; 
-
                 chatContainer.innerHTML = '';
                 
                 if (!notasString || notasString.trim() === '') {
@@ -128,7 +131,6 @@ onAuthStateChanged(auth, async (user) => {
                 }
 
                 const entradas = notasString.split('||').filter(e => e.trim() !== '');
-
                 entradas.forEach(entrada => {
                     const partes = entrada.split('&&&');
                     let fechaStr = "Fecha desconocida";
@@ -138,8 +140,7 @@ onAuthStateChanged(auth, async (user) => {
                         fechaStr = partes[1]; 
                         cuerpoTexto = partes.slice(2).join('&&&'); 
                     } else if (partes.length === 2) {
-                        fechaStr = partes[0];
-                        cuerpoTexto = partes[1];
+                        fechaStr = partes[0]; cuerpoTexto = partes[1];
                     } else {
                         cuerpoTexto = entrada;
                     }
@@ -156,49 +157,73 @@ onAuthStateChanged(auth, async (user) => {
                 if (!visitasContainer) return;
                 visitasContainer.innerHTML = ''; 
 
+                // 1. Limpiar pines viejos del mapa
+                window.pinesVisitas.forEach(pin => pin.setMap(null));
+                window.pinesVisitas = [];
+
                 const visitasFiltradas = todasLasVisitas.filter(v => (filtroActual === 'Todos' || v.estado === filtroActual));
+                
                 if (visitasFiltradas.length === 0) {
                     visitasContainer.innerHTML = `<p style="color: gray; text-align: center; margin-top: 40px;">No hay visitas.</p>`;
                     return;
                 }
 
                 visitasFiltradas.forEach(visita => {
-                    let colorPin = '#FF9800'; 
-                    if (visita.estado === 'Nueva') colorPin = '#2196F3'; 
-                    if (visita.estado === 'Ausente') colorPin = '#F44336'; 
-                    if (visita.estado === 'Revisita') colorPin = '#4CAF50'; 
-                    if (visita.estado === 'Estudio') colorPin = '#FFEB3B'; 
-                    if (visita.estado === 'No visitar') colorPin = '#9C27B0'; 
+                    // 2. Dibujar Pin en el Mapa (si hay coordenadas y el mapa cargó)
+                    if (window.mapaGlobal && visita.latitud && visita.longitud) {
+                        const pin = new google.maps.Marker({
+                            position: { lat: visita.latitud, lng: visita.longitud },
+                            map: window.mapaGlobal,
+                            icon: obtenerColorPin(visita.estado)
+                        });
+
+                        // Hacer que al tocar el pin en el mapa, se abra la ficha
+                        pin.addListener('click', () => { abrirFichaVisita(visita); });
+                        window.pinesVisitas.push(pin);
+                    }
+
+                    // 3. Dibujar Tarjeta en la lista
+                    let colorPinLista = '#FF9800'; 
+                    if (visita.estado === 'Nueva') colorPinLista = '#2196F3'; 
+                    if (visita.estado === 'Ausente') colorPinLista = '#F44336'; 
+                    if (visita.estado === 'Revisita') colorPinLista = '#4CAF50'; 
+                    if (visita.estado === 'Estudio') colorPinLista = '#FFEB3B'; 
+                    if (visita.estado === 'No visitar') colorPinLista = '#9C27B0'; 
 
                     const nombreMostrar = (visita.nombre === 'Nueva' && visita.apellido === 'Visita') ? 'Visita Nueva' : `${visita.nombre} ${visita.apellido}`;
                     const fecha = new Date(visita.timestamp || Date.now()).toLocaleDateString();
 
                     const card = document.createElement('div');
                     card.className = 'visita-card';
-                    card.innerHTML = `<div class="visita-color" style="background-color: ${colorPin};"></div><div class="visita-info" style="flex: 1;"><h3>${nombreMostrar}</h3><p>📍 T${visita.territorio} - ${visita.poligono} | 📅 ${fecha}</p></div>`;
+                    card.innerHTML = `<div class="visita-color" style="background-color: ${colorPinLista};"></div><div class="visita-info" style="flex: 1;"><h3>${nombreMostrar}</h3><p>📍 T${visita.territorio} - ${visita.poligono} | 📅 ${fecha}</p></div>`;
                     
-                    card.onclick = () => {
-                        window.miUsuario.visitaActivaId = visita.id;
-                        window.miUsuario.visitaActivaNotas = visita.notas || "";
-
-                        const fn = document.getElementById('ficha-nombre'); if (fn) fn.value = visita.nombre !== 'Nueva' ? visita.nombre : '';
-                        const fa = document.getElementById('ficha-apellido'); if (fa) fa.value = visita.apellido !== 'Visita' ? visita.apellido : '';
-                        const ft = document.getElementById('ficha-terr'); if (ft) ft.innerText = visita.territorio || '-';
-                        const fm = document.getElementById('ficha-manz'); if (fm) fm.innerText = visita.poligono || '-';
-                        const fe = document.getElementById('ficha-estado'); if (fe) fe.value = visita.estado || 'Nueva';
-                        const fd = document.getElementById('ficha-direccion'); if (fd) fd.value = visita.direccion || '';
-                        const fp = document.getElementById('ficha-publi'); if (fp) fp.value = visita.publicacionDejada || '';
-                        const fv = document.getElementById('ficha-video'); if (fv) fv.value = visita.videoVisto || '';
-                        const fpx = document.getElementById('ficha-proximo'); if (fpx) fpx.value = visita.proximoPaso || '';
-                        const fno = document.getElementById('ficha-notas'); if (fno) fno.value = ''; 
-
-                        pintarGlobosHistorial(visita.notas); 
-                        const modal = document.getElementById('ficha-modal');
-                        if (modal) modal.style.display = 'flex';
-                    };
+                    card.onclick = () => { abrirFichaVisita(visita); };
                     visitasContainer.appendChild(card);
                 });
             };
+
+            // FUNCIÓN REUTILIZABLE PARA ABRIR LA FICHA
+            function abrirFichaVisita(visita) {
+                window.miUsuario.visitaActivaId = visita.id;
+                window.miUsuario.visitaActivaNotas = visita.notas || "";
+                window.miUsuario.tempLat = visita.latitud || 0;
+                window.miUsuario.tempLng = visita.longitud || 0;
+
+                const fn = document.getElementById('ficha-nombre'); if (fn) fn.value = visita.nombre !== 'Nueva' ? visita.nombre : '';
+                const fa = document.getElementById('ficha-apellido'); if (fa) fa.value = visita.apellido !== 'Visita' ? visita.apellido : '';
+                const ft = document.getElementById('ficha-terr'); if (ft) ft.innerText = visita.territorio || '-';
+                const fm = document.getElementById('ficha-manz'); if (fm) fm.innerText = visita.poligono || '-';
+                const fe = document.getElementById('ficha-estado'); if (fe) fe.value = visita.estado || 'Nueva';
+                const fd = document.getElementById('ficha-direccion'); if (fd) fd.value = visita.direccion || '';
+                const fp = document.getElementById('ficha-publi'); if (fp) fp.value = visita.publicacionDejada || '';
+                const fv = document.getElementById('ficha-video'); if (fv) fv.value = visita.videoVisto || '';
+                const fpx = document.getElementById('ficha-proximo'); if (fpx) fpx.value = visita.proximoPaso || '';
+                const fno = document.getElementById('ficha-notas'); if (fno) fno.value = ''; 
+
+                pintarGlobosHistorial(visita.notas); 
+                const modal = document.getElementById('ficha-modal');
+                if (modal) modal.style.display = 'flex';
+            }
 
             const chips = document.querySelectorAll('.filtro-chip');
             chips.forEach(chip => {
@@ -208,7 +233,7 @@ onAuthStateChanged(auth, async (user) => {
                 });
             });
 
-            // LOGICA GUARDAR MODAL
+            // LOGICA GUARDAR MODAL (Para nuevas o editadas)
             const btnGuardar = document.getElementById('btn-guardar-ficha');
             if (btnGuardar) {
                 btnGuardar.onclick = async () => {
@@ -234,32 +259,34 @@ onAuthStateChanged(auth, async (user) => {
 
                         const nuevaEntrada = `${idFalso}&&&${fechaStr}&&&${cuerpoMensaje}`;
                         
-                        if (stringNotasFinal !== "") {
-                            stringNotasFinal += `||${nuevaEntrada}`;
-                        } else {
-                            stringNotasFinal = nuevaEntrada;
-                        }
+                        if (stringNotasFinal !== "") stringNotasFinal += `||${nuevaEntrada}`; else stringNotasFinal = nuevaEntrada;
                     }
 
+                    // Usamos setDoc para que, si el ID es nuevo, lo cree, y si existe, lo actualice (equivalente al OnConflictStrategy.REPLACE de tu Kotlin)
                     const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
-                    await updateDoc(docVisitaRef, {
-                        nombre: document.getElementById('ficha-nombre') ? document.getElementById('ficha-nombre').value.trim() : 'Nueva',
-                        apellido: document.getElementById('ficha-apellido') ? document.getElementById('ficha-apellido').value.trim() : 'Visita',
-                        estado: document.getElementById('ficha-estado') ? document.getElementById('ficha-estado').value : 'Nueva',
-                        direccion: document.getElementById('ficha-direccion') ? document.getElementById('ficha-direccion').value.trim() : '',
+                    await setDoc(docVisitaRef, {
+                        nombre: document.getElementById('ficha-nombre').value.trim() || 'Nueva',
+                        apellido: document.getElementById('ficha-apellido').value.trim() || 'Visita',
+                        estado: document.getElementById('ficha-estado').value,
+                        direccion: document.getElementById('ficha-direccion').value.trim(),
+                        territorio: document.getElementById('ficha-terr').innerText,
+                        poligono: document.getElementById('ficha-manz').innerText,
                         publicacionDejada: publiVal,
                         videoVisto: videoVal,
                         proximoPaso: proximoVal,
                         notas: stringNotasFinal,
+                        latitud: window.miUsuario.tempLat,
+                        longitud: window.miUsuario.tempLng,
+                        congregacionId: window.miUsuario.congregacionId,
                         timestamp: Date.now()
-                    });
+                    }, { merge: true });
 
                     const modal = document.getElementById('ficha-modal');
                     if (modal) modal.style.display = 'none';
                 };
             }
 
-            // MAPA
+            // MAPA CON INTERACTIVIDAD
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
             if (llaveSnap.exists()) {
@@ -270,15 +297,40 @@ onAuthStateChanged(auth, async (user) => {
                     const mapEl = document.getElementById("map");
                     if (!mapEl) return; 
 
-                    const map = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
-                    map.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
+                    window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
+                    window.mapaGlobal.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
+
+                    // --- LA MAGIA DEL CLIC EN LA MANZANA (Traducción de tu onMapLongClick) ---
+                    window.mapaGlobal.data.addListener('click', (event) => {
+                        const numManzana = event.feature.getProperty('numero') || '-'; 
+                        const numTerritorio = event.feature.getProperty('territorio') || '-';
+                        
+                        // Generamos un ID falso único como en Android (UUID)
+                        const nuevoId = Date.now().toString(); 
+                        
+                        // Simulamos una visita vacía
+                        const visitaVacia = {
+                            id: nuevoId,
+                            nombre: 'Nueva',
+                            apellido: 'Visita',
+                            territorio: numTerritorio,
+                            poligono: numManzana,
+                            latitud: event.latLng.lat(),
+                            longitud: event.latLng.lng(),
+                            estado: 'Nueva',
+                            direccion: '',
+                            notas: ''
+                        };
+
+                        abrirFichaVisita(visitaVacia);
+                    });
 
                     const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
                     const bounds = new google.maps.LatLngBounds();
                     const marcadoresMicro = []; const marcadoresMacro = []; const agrupacionMacro = {};
 
-                    snapshotM.forEach(doc => { if (doc.data().geojson) map.data.addGeoJson(JSON.parse(doc.data().geojson)); });
-                    map.data.forEach(feature => {
+                    snapshotM.forEach(doc => { if (doc.data().geojson) window.mapaGlobal.data.addGeoJson(JSON.parse(doc.data().geojson)); });
+                    window.mapaGlobal.data.forEach(feature => {
                         const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
                         const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
                         if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
@@ -299,14 +351,17 @@ onAuthStateChanged(auth, async (user) => {
                         marcadoresMacro.push(mMacro);
                     });
 
-                    map.addListener('zoom_changed', () => {
-                        const z = map.getZoom();
-                        if (z >= 15.5) { marcadoresMicro.forEach(m => m.setMap(map)); marcadoresMacro.forEach(m => m.setMap(null)); } 
-                        else if (z >= 13) { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(map)); } 
+                    window.mapaGlobal.addListener('zoom_changed', () => {
+                        const z = window.mapaGlobal.getZoom();
+                        if (z >= 15.5) { marcadoresMicro.forEach(m => m.setMap(window.mapaGlobal)); marcadoresMacro.forEach(m => m.setMap(null)); } 
+                        else if (z >= 13) { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); } 
                         else { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(null)); }
                     });
 
-                    if (snapshotM.size > 0) { map.fitBounds(bounds); google.maps.event.trigger(map, 'zoom_changed'); }
+                    if (snapshotM.size > 0) { window.mapaGlobal.fitBounds(bounds); google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); }
+                    
+                    // Disparamos la renderización de pines por si las visitas cargaron antes que el mapa
+                    renderizarVisitas();
                 };
                 document.head.appendChild(scriptMapa);
             }
@@ -317,11 +372,9 @@ onAuthStateChanged(auth, async (user) => {
         const btn = document.getElementById('btn-login');
         if (btn) btn.innerText = "Iniciar sesión con Google";
     }
-}); // <-- AQUÍ ESTÁ LA LLAVE QUE SE HABÍA PERDIDO
+});
 
-// ==========================================
 // TABS Y EVENTOS FUERA DE FIREBASE
-// ==========================================
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.view-section');
 tabs.forEach(tab => {
