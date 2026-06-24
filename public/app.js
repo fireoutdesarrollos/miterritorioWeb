@@ -1,12 +1,14 @@
-// 1. IMPORTACIONES DE FIREBASE (¡Ahora con signInWithPopup!)
+// 1. IMPORTACIONES DE FIREBASE
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
+// 2. SERVICE WORKER
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.error(err)));
 }
 
+// 3. CONFIGURACIÓN FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyALd_mItZYSLluocbxI8EUPle18UE4-8NQ",
   authDomain: "territorios-a3ba5.firebaseapp.com",
@@ -22,27 +24,31 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-const btnLogin = document.getElementById('btn-login');
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-// NUEVO MOTOR DE LOGIN (Más seguro y visible)
-if (btnLogin) {
-    btnLogin.addEventListener('click', async () => {
-        console.log("¡Botón clickeado! Abriendo Google...");
-        btnLogin.innerText = "Conectando..."; // Te avisa que está trabajando
-        try {
-            await signInWithPopup(auth, provider);
-            console.log("¡Login exitoso!");
-        } catch (error) {
-            console.error("Error al iniciar sesión:", error);
-            btnLogin.innerText = "Error. Intentar de nuevo";
-            alert("No se pudo iniciar sesión. Revisá la consola.");
-        }
-    });
-}
+// ==========================================
+// CONFIRMACIÓN Y MOTOR DE LOGIN DIRECTO
+// ==========================================
+console.log("🚀 MOTOR JS VERSIÓN 100 CARGADO CORRECTAMENTE");
 
-// 4. EL CORAZÓN DE LA APLICACIÓN
+window.iniciarSesionGoogle = async () => {
+    console.log("¡Botón presionado mediante conexión directa!");
+    const btn = document.getElementById('btn-login');
+    if (btn) btn.innerText = "Conectando con Google...";
+    
+    try {
+        await signInWithPopup(auth, provider);
+        console.log("¡Login exitoso!");
+    } catch (error) {
+        console.error("Fallo el login:", error);
+        if (btn) btn.innerText = "Error. Intentar de nuevo";
+    }
+};
+
+// ==========================================
+// EL CORAZÓN DE LA APLICACIÓN
+// ==========================================
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         if (loginSection) loginSection.style.display = 'none';
@@ -304,10 +310,14 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         if (loginSection) loginSection.style.display = 'flex'; 
         if (dashboardSection) dashboardSection.style.display = 'none';
-        if (btnLogin) btnLogin.innerText = "Iniciar sesión con Google"; // Reseteamos el botón si se cierra la sesión
+        const btn = document.getElementById('btn-login');
+        if (btn) btn.innerText = "Iniciar sesión con Google";
     }
-});
+}); // <-- AQUÍ ESTÁ LA LLAVE QUE SE HABÍA PERDIDO
 
+// ==========================================
+// TABS Y EVENTOS FUERA DE FIREBASE
+// ==========================================
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.view-section');
 tabs.forEach(tab => {
