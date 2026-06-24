@@ -106,7 +106,16 @@ button:active { opacity: 0.8; }
    MAPA Y BOTÓN FLOTANTE
    ========================================= */
 .map-container { position: relative; width: 100%; height: 100%; }
-#map { width: 100%; height: 100%; background-color: #e5e5e5; }
+
+#map { 
+    width: 100%; 
+    height: 100%; 
+    background-color: #e5e5e5; 
+    /* ESCUDO PARA IPHONE: Adentro de las llaves */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
 
 .fab-button {
     position: absolute; bottom: 30px; left: 20px; padding: 0;

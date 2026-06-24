@@ -27,10 +27,7 @@ const provider = new GoogleAuthProvider();
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-// ==========================================
-// CONFIRMACIÓN Y MOTOR DE LOGIN DIRECTO
-// ==========================================
-console.log("🚀 MOTOR JS GEMELO (VERSIÓN 102 - LONG PRESS ACTIVO) CARGADO");
+console.log("🚀 MOTOR JS GEMELO (VERSIÓN 103 - MODO IPHONE ACTIVO) CARGADO");
 
 window.iniciarSesionGoogle = async () => {
     const btn = document.getElementById('btn-login');
@@ -42,13 +39,11 @@ window.iniciarSesionGoogle = async () => {
     }
 };
 
-// VARIABLES GLOBALES DEL MAPA
 window.mapaGlobal = null;
 window.pinesVisitas = [];
 
-// FUNCIONES DE COLORES (Traducción de tu Kotlin)
 function obtenerColorPin(estado) {
-    let color = '#E65100'; // Naranja (Otro)
+    let color = '#E65100'; 
     if (estado === 'Nueva') color = '#0288D1'; 
     if (estado === 'Ausente') color = '#D32F2F'; 
     if (estado === 'Revisita') color = '#388E3C'; 
@@ -64,9 +59,6 @@ function obtenerColorPin(estado) {
     };
 }
 
-// ==========================================
-// EL CORAZÓN DE LA APLICACIÓN
-// ==========================================
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         if (loginSection) loginSection.style.display = 'none';
@@ -96,7 +88,6 @@ onAuthStateChanged(auth, async (user) => {
             const tabServicio = document.getElementById('tab-servicio');
             if (tabServicio) tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
 
-            // CARGAR PUBLICACIONES DINÁMICAS
             const ministerioRef = doc(db, "configuracion", "ministerio");
             const ministerioSnap = await getDoc(ministerioRef);
             if (ministerioSnap.exists()) {
@@ -111,7 +102,6 @@ onAuthStateChanged(auth, async (user) => {
                 if (dataMin.videos && selectVideo) dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
             }
 
-            // MOTOR DE VISITAS
             const visitasContainer = document.getElementById('lista-visitas-container');
             let todasLasVisitas = []; 
             let filtroActual = 'Todos';
@@ -163,7 +153,6 @@ onAuthStateChanged(auth, async (user) => {
                 if (!visitasContainer) return;
                 visitasContainer.innerHTML = ''; 
 
-                // 1. Limpiar pines viejos del mapa
                 window.pinesVisitas.forEach(pin => pin.setMap(null));
                 window.pinesVisitas = [];
 
@@ -175,20 +164,16 @@ onAuthStateChanged(auth, async (user) => {
                 }
 
                 visitasFiltradas.forEach(visita => {
-                    // 2. Dibujar Pin en el Mapa (si hay coordenadas y el mapa cargó)
                     if (window.mapaGlobal && visita.latitud && visita.longitud) {
                         const pin = new google.maps.Marker({
                             position: { lat: visita.latitud, lng: visita.longitud },
                             map: window.mapaGlobal,
                             icon: obtenerColorPin(visita.estado)
                         });
-
-                        // Hacer que al tocar el pin en el mapa, se abra la ficha
                         pin.addListener('click', () => { abrirFichaVisita(visita); });
                         window.pinesVisitas.push(pin);
                     }
 
-                    // 3. Dibujar Tarjeta en la lista
                     let colorPinLista = '#FF9800'; 
                     if (visita.estado === 'Nueva') colorPinLista = '#2196F3'; 
                     if (visita.estado === 'Ausente') colorPinLista = '#F44336'; 
@@ -208,7 +193,6 @@ onAuthStateChanged(auth, async (user) => {
                 });
             };
 
-            // FUNCIÓN REUTILIZABLE PARA ABRIR LA FICHA
             function abrirFichaVisita(visita) {
                 window.miUsuario.visitaActivaId = visita.id;
                 window.miUsuario.visitaActivaNotas = visita.notas || "";
@@ -239,7 +223,6 @@ onAuthStateChanged(auth, async (user) => {
                 });
             });
 
-            // LOGICA GUARDAR MODAL (Para nuevas o editadas)
             const btnGuardar = document.getElementById('btn-guardar-ficha');
             if (btnGuardar) {
                 btnGuardar.onclick = async () => {
@@ -268,7 +251,6 @@ onAuthStateChanged(auth, async (user) => {
                         if (stringNotasFinal !== "") stringNotasFinal += `||${nuevaEntrada}`; else stringNotasFinal = nuevaEntrada;
                     }
 
-                    // Usamos setDoc para que, si el ID es nuevo, lo cree, y si existe, lo actualice (equivalente al OnConflictStrategy.REPLACE de tu Kotlin)
                     const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
                     await setDoc(docVisitaRef, {
                         nombre: document.getElementById('ficha-nombre').value.trim() || 'Nueva',
@@ -292,7 +274,7 @@ onAuthStateChanged(auth, async (user) => {
                 };
             }
 
-            // MAPA CON INTERACTIVIDAD (ACTUALIZADO PARA PULSO LARGO / CLIC DERECHO)
+            // MAPA Y CRONÓMETRO ANTI-IPHONE
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
             if (llaveSnap.exists()) {
@@ -306,31 +288,42 @@ onAuthStateChanged(auth, async (user) => {
                     window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
                     window.mapaGlobal.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
 
-                    // --- LA MAGIA DEL PULSO LARGO (rightclick en Google Maps JS) ---
-                    // En celular, mantener presionado el mapa dispara un 'rightclick' de manera nativa.
-                    window.mapaGlobal.data.addListener('rightclick', (event) => {
+                    // -- LÓGICA DE PULSO LARGO EXCLUSIVA PARA MÓVILES (CRONÓMETRO) --
+                    let temporizadorPulsoLargo;
+
+                    function procesarNuevaVisita(event) {
                         const numManzana = event.feature.getProperty('numero') || '-'; 
                         const numTerritorio = event.feature.getProperty('territorio') || '-';
-                        
-                        // Generamos un ID falso único como en Android (UUID)
                         const nuevoId = Date.now().toString(); 
                         
-                        // Capturamos el event.latLng EXACTO donde el dedo tocó la pantalla
                         const visitaVacia = {
-                            id: nuevoId,
-                            nombre: 'Nueva',
-                            apellido: 'Visita',
-                            territorio: numTerritorio,
-                            poligono: numManzana,
-                            latitud: event.latLng.lat(),
-                            longitud: event.latLng.lng(),
-                            estado: 'Nueva',
-                            direccion: '',
-                            notas: ''
+                            id: nuevoId, nombre: 'Nueva', apellido: 'Visita',
+                            territorio: numTerritorio, poligono: numManzana,
+                            latitud: event.latLng.lat(), longitud: event.latLng.lng(),
+                            estado: 'Nueva', direccion: '', notas: ''
                         };
-
                         abrirFichaVisita(visitaVacia);
+                    }
+
+                    // 1. Toca la pantalla: Inicia cronómetro de 600ms
+                    window.mapaGlobal.data.addListener('mousedown', (event) => {
+                        temporizadorPulsoLargo = setTimeout(() => {
+                            procesarNuevaVisita(event);
+                        }, 600); 
                     });
+
+                    // 2. Levanta el dedo o hace clic normal: Cancela el cronómetro
+                    window.mapaGlobal.data.addListener('mouseup', () => clearTimeout(temporizadorPulsoLargo));
+                    window.mapaGlobal.data.addListener('click', () => clearTimeout(temporizadorPulsoLargo));
+                    
+                    // 3. Arrastra el mapa: Cancela el cronómetro
+                    window.mapaGlobal.addListener('dragstart', () => clearTimeout(temporizadorPulsoLargo));
+
+                    // 4. Clic derecho nativo (Para que siga funcionando genial en la PC)
+                    window.mapaGlobal.data.addListener('rightclick', (event) => {
+                        procesarNuevaVisita(event);
+                    });
+
 
                     const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
                     const bounds = new google.maps.LatLngBounds();
@@ -367,7 +360,6 @@ onAuthStateChanged(auth, async (user) => {
 
                     if (snapshotM.size > 0) { window.mapaGlobal.fitBounds(bounds); google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); }
                     
-                    // Disparamos la renderización de pines por si las visitas cargaron antes que el mapa
                     renderizarVisitas();
                 };
                 document.head.appendChild(scriptMapa);
@@ -381,7 +373,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// TABS Y EVENTOS FUERA DE FIREBASE
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.view-section');
 tabs.forEach(tab => {
