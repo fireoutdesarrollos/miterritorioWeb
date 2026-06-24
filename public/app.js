@@ -289,9 +289,8 @@ onAuthStateChanged(auth, async (user) => {
                     window.mapaGlobal.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
 
                     // -- LÓGICA DE PULSO LARGO EXCLUSIVA PARA MÓVILES (CRONÓMETRO) --
-                    let temporizadorPulsoLargo;
-
-                    function procesarNuevaVisita(event) {
+// -- TOQUE SIMPLE (Protegido nativamente contra arrastres por Google Maps) --
+                    window.mapaGlobal.data.addListener('click', (event) => {
                         const numManzana = event.feature.getProperty('numero') || '-'; 
                         const numTerritorio = event.feature.getProperty('territorio') || '-';
                         const nuevoId = Date.now().toString(); 
@@ -303,25 +302,6 @@ onAuthStateChanged(auth, async (user) => {
                             estado: 'Nueva', direccion: '', notas: ''
                         };
                         abrirFichaVisita(visitaVacia);
-                    }
-
-                    // 1. Toca la pantalla: Inicia cronómetro de 600ms
-                    window.mapaGlobal.data.addListener('mousedown', (event) => {
-                        temporizadorPulsoLargo = setTimeout(() => {
-                            procesarNuevaVisita(event);
-                        }, 600); 
-                    });
-
-                    // 2. Levanta el dedo o hace clic normal: Cancela el cronómetro
-                    window.mapaGlobal.data.addListener('mouseup', () => clearTimeout(temporizadorPulsoLargo));
-                    window.mapaGlobal.data.addListener('click', () => clearTimeout(temporizadorPulsoLargo));
-                    
-                    // 3. Arrastra el mapa: Cancela el cronómetro
-                    window.mapaGlobal.addListener('dragstart', () => clearTimeout(temporizadorPulsoLargo));
-
-                    // 4. Clic derecho nativo (Para que siga funcionando genial en la PC)
-                    window.mapaGlobal.data.addListener('rightclick', (event) => {
-                        procesarNuevaVisita(event);
                     });
 
 

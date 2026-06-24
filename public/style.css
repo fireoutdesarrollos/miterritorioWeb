@@ -111,10 +111,12 @@ button:active { opacity: 0.8; }
     width: 100%; 
     height: 100%; 
     background-color: #e5e5e5; 
-    /* ESCUDO PARA IPHONE: Adentro de las llaves */
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
+    /* ELIMINA LA SOMBRA EN SAMSUNG/ANDROID 👇 */
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
 }
 
 .fab-button {
