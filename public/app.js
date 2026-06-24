@@ -3,10 +3,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
+// 2. SERVICE WORKER
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.error(err)));
 }
 
+// 3. CONFIGURACIÓN FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyALd_mItZYSLluocbxI8EUPle18UE4-8NQ",
   authDomain: "territorios-a3ba5.firebaseapp.com",
@@ -25,8 +27,10 @@ const provider = new GoogleAuthProvider();
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
+// ==========================================
 // CONFIRMACIÓN Y MOTOR DE LOGIN DIRECTO
-console.log("🚀 MOTOR JS GEMELO (VERSIÓN 101) CARGADO");
+// ==========================================
+console.log("🚀 MOTOR JS GEMELO (VERSIÓN 102 - LONG PRESS ACTIVO) CARGADO");
 
 window.iniciarSesionGoogle = async () => {
     const btn = document.getElementById('btn-login');
@@ -60,6 +64,9 @@ function obtenerColorPin(estado) {
     };
 }
 
+// ==========================================
+// EL CORAZÓN DE LA APLICACIÓN
+// ==========================================
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         if (loginSection) loginSection.style.display = 'none';
@@ -84,7 +91,6 @@ onAuthStateChanged(auth, async (user) => {
                 if (congData.roles && congData.roles[email]) miRol = congData.roles[email];
             }
             
-            // Agregamos lat y lng a la variable temporal para cuando creemos una visita
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "", tempLat: 0, tempLng: 0 };
 
             const tabServicio = document.getElementById('tab-servicio');
@@ -286,7 +292,7 @@ onAuthStateChanged(auth, async (user) => {
                 };
             }
 
-            // MAPA CON INTERACTIVIDAD
+            // MAPA CON INTERACTIVIDAD (ACTUALIZADO PARA PULSO LARGO / CLIC DERECHO)
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
             if (llaveSnap.exists()) {
@@ -300,15 +306,16 @@ onAuthStateChanged(auth, async (user) => {
                     window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
                     window.mapaGlobal.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
 
-                    // --- LA MAGIA DEL CLIC EN LA MANZANA (Traducción de tu onMapLongClick) ---
-                    window.mapaGlobal.data.addListener('click', (event) => {
+                    // --- LA MAGIA DEL PULSO LARGO (rightclick en Google Maps JS) ---
+                    // En celular, mantener presionado el mapa dispara un 'rightclick' de manera nativa.
+                    window.mapaGlobal.data.addListener('rightclick', (event) => {
                         const numManzana = event.feature.getProperty('numero') || '-'; 
                         const numTerritorio = event.feature.getProperty('territorio') || '-';
                         
                         // Generamos un ID falso único como en Android (UUID)
                         const nuevoId = Date.now().toString(); 
                         
-                        // Simulamos una visita vacía
+                        // Capturamos el event.latLng EXACTO donde el dedo tocó la pantalla
                         const visitaVacia = {
                             id: nuevoId,
                             nombre: 'Nueva',
