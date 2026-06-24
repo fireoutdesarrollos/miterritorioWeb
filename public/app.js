@@ -1,12 +1,10 @@
-// 1. IMPORTACIONES DE FIREBASE (Alineadas con la arquitectura)
+// 1. IMPORTACIONES DE FIREBASE
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, orderBy, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
-  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.error(err)));
 }
 
 const firebaseConfig = {
@@ -31,9 +29,6 @@ const dashboardSection = document.getElementById('dashboard-section');
 btnLogin.addEventListener('click', () => { signInWithRedirect(auth, provider); });
 getRedirectResult(auth).catch((error) => console.error(error));
 
-// Escuchador del Historial (Global para evitar solapamientos)
-window.historialUnsubscribe = null;
-
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         loginSection.style.display = 'none';
@@ -47,9 +42,7 @@ onAuthStateChanged(auth, async (user) => {
 
             const userRef = doc(db, "usuarios", email);
             const userSnap = await getDoc(userRef);
-            if (userSnap.exists()) {
-                nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido}`;
-            }
+            if (userSnap.exists()) nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido}`;
 
             const congRef = doc(db, "congregaciones", miCongregacionId);
             const congSnap = await getDoc(congRef);
@@ -59,13 +52,46 @@ onAuthStateChanged(auth, async (user) => {
                 if (congData.roles && congData.roles[email]) miRol = congData.roles[email];
             }
             
-            window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null };
+            window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "" };
 
             const tabServicio = document.getElementById('tab-servicio');
-            if (miRol === 'siervo' || miRol === 'ayudante') tabServicio.style.display = 'block'; 
-            else tabServicio.style.display = 'none'; 
+            tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
 
-            // MOTOR DE RENDERS: MIS VISITAS
+            // ==========================================
+            // NUEVO: CARGAR PUBLICACIONES Y VIDEOS DINÁMICOS
+            // ==========================================
+            const ministerioRef = doc(db, "configuracion", "ministerio");
+            const ministerioSnap = await getDoc(ministerioRef);
+            if (ministerioSnap.exists()) {
+                const dataMin = ministerioSnap.data();
+                const selectPubli = document.getElementById('ficha-publi');
+                const selectVideo = document.getElementById('ficha-video');
+
+                // Vaciamos los fijos y dejamos solo la opción neutra
+                selectPubli.innerHTML = '<option value="">Ninguna</option>';
+                selectVideo.innerHTML = '<option value="">Ninguno</option>';
+
+                // Inyectamos las publicaciones de Firebase
+                if (dataMin.publicaciones && Array.isArray(dataMin.publicaciones)) {
+                    dataMin.publicaciones.forEach(pub => {
+                        const opt = document.createElement('option');
+                        opt.value = pub; opt.textContent = pub;
+                        selectPubli.appendChild(opt);
+                    });
+                }
+
+                // Inyectamos los videos de Firebase
+                if (dataMin.videos && Array.isArray(dataMin.videos)) {
+                    dataMin.videos.forEach(vid => {
+                        const opt = document.createElement('option');
+                        opt.value = vid; opt.textContent = vid;
+                        selectVideo.appendChild(opt);
+                    });
+                }
+            }
+            // ==========================================
+
+            // MOTOR DE VISITAS Y TRADUCTOR DE TEXTO
             const visitasContainer = document.getElementById('lista-visitas-container');
             let todasLasVisitas = []; 
             let filtroActual = 'Todos';
@@ -80,17 +106,43 @@ onAuthStateChanged(auth, async (user) => {
                 renderizarVisitas();
             });
 
+            function pintarGlobosHistorial(notasString) {
+                const chatContainer = document.getElementById('historial-conversaciones-container');
+                chatContainer.innerHTML = '';
+                
+                if (!notasString || notasString.trim() === '') {
+                    chatContainer.innerHTML = '<p style="color: gray; font-size: 13px; text-align: center; margin-top: 10px;">No hay conversaciones previas registradas.</p>';
+                    return;
+                }
+
+                const entradas = notasString.split('||').filter(e => e.trim() !== '');
+
+                entradas.forEach(entrada => {
+                    const partes = entrada.split('&&&');
+                    if (partes.length < 2) return;
+
+                    const cabecera = partes[0];
+                    let cuerpoTexto = partes[1];
+
+                    const cabeceraPartes = cabecera.split('&&');
+                    const fechaStr = cabeceraPartes.length > 1 ? cabeceraPartes[1] : cabeceraPartes[0];
+
+                    const textoLimpio = cuerpoTexto.replace(/\/\//g, '<br><br>• ');
+
+                    const globo = document.createElement('div');
+                    globo.className = 'chat-bubble';
+                    globo.innerHTML = `<div class="chat-text">${textoLimpio}</div><div class="chat-meta">📅 ${fechaStr}</div>`;
+                    chatContainer.appendChild(globo);
+                });
+            }
+
             window.renderizarVisitas = () => {
                 if (!visitasContainer) return;
                 visitasContainer.innerHTML = ''; 
 
-                const visitasFiltradas = todasLasVisitas.filter(v => {
-                    if (filtroActual === 'Todos') return true;
-                    return v.estado === filtroActual;
-                });
-
+                const visitasFiltradas = todasLasVisitas.filter(v => (filtroActual === 'Todos' || v.estado === filtroActual));
                 if (visitasFiltradas.length === 0) {
-                    visitasContainer.innerHTML = `<p style="color: gray; text-align: center; margin-top: 40px;">No hay visitas en esta categoría.</p>`;
+                    visitasContainer.innerHTML = `<p style="color: gray; text-align: center; margin-top: 40px;">No hay visitas.</p>`;
                     return;
                 }
 
@@ -107,60 +159,27 @@ onAuthStateChanged(auth, async (user) => {
 
                     const card = document.createElement('div');
                     card.className = 'visita-card';
-                    card.innerHTML = `
-                        <div class="visita-color" style="background-color: ${colorPin};"></div>
-                        <div class="visita-info" style="flex: 1;">
-                            <h3>${nombreMostrar}</h3>
-                            <p>📍 T${visita.territorio} - ${visita.poligono} | 📅 ${fecha}</p>
-                        </div>
-                    `;
+                    card.innerHTML = `<div class="visita-color" style="background-color: ${colorPin};"></div><div class="visita-info" style="flex: 1;"><h3>${nombreMostrar}</h3><p>📍 T${visita.territorio} - ${visita.poligono} | 📅 ${fecha}</p></div>`;
                     
-                    // ACCIÓN AL TOCAR: LEER DATOS E HISTORIAL (RÉPLICA ANDROID)
                     card.onclick = () => {
                         window.miUsuario.visitaActivaId = visita.id;
+                        window.miUsuario.visitaActivaNotas = visita.notas || "";
 
-                        // Datos fijos
                         document.getElementById('ficha-nombre').value = visita.nombre !== 'Nueva' ? visita.nombre : '';
                         document.getElementById('ficha-apellido').value = visita.apellido !== 'Visita' ? visita.apellido : '';
                         document.getElementById('ficha-terr').innerText = visita.territorio || '-';
                         document.getElementById('ficha-manz').innerText = visita.poligono || '-';
                         document.getElementById('ficha-estado').value = visita.estado || 'Nueva';
                         document.getElementById('ficha-direccion').value = visita.direccion || '';
+                        
+                        // Asignamos publicación y video (ahora son dinámicos)
                         document.getElementById('ficha-publi').value = visita.publicacionDejada || '';
                         document.getElementById('ficha-video').value = visita.videoVisto || '';
                         document.getElementById('ficha-proximo').value = visita.proximoPaso || '';
 
-                        // CRITICAL RÉPLICA: Siempre arranca LIMPIO arriba
-                        document.getElementById('ficha-notas').value = '';
+                        document.getElementById('ficha-notas').value = ''; 
 
-                        // Cargar subcolección de historial en tiempo real
-                        if (window.historialUnsubscribe) window.historialUnsubscribe();
-
-                        const chatContainer = document.getElementById('historial-conversaciones-container');
-                        chatContainer.innerHTML = '<p style="color: gray; font-size: 13px; text-align: center;">Buscando mensajes...</p>';
-
-                        const historialRef = collection(db, "usuarios", email, "mis_visitas", visita.id, "conversaciones");
-                        const qHistorial = query(historialRef, orderBy("timestamp", "asc")); // Cronológico como WhatsApp
-
-                        window.historialUnsubscribe = onSnapshot(qHistorial, (hSnapshot) => {
-                            chatContainer.innerHTML = '';
-                            if (hSnapshot.empty) {
-                                chatContainer.innerHTML = '<p style="color: gray; font-size: 13px; text-align: center; margin-top: 10px;">No hay conversaciones previas registradas.</p>';
-                                return;
-                            }
-                            hSnapshot.forEach((hDoc) => {
-                                const dataConv = hDoc.data();
-                                const cFecha = new Date(dataConv.timestamp || Date.now()).toLocaleDateString();
-                                const globo = document.createElement('div');
-                                globo.className = 'chat-bubble';
-                                globo.innerHTML = `
-                                    <div class="chat-text">${dataConv.notas || ''}</div>
-                                    <div class="chat-meta">📅 ${cFecha}</div>
-                                `;
-                                chatContainer.appendChild(globo);
-                            });
-                        });
-
+                        pintarGlobosHistorial(visita.notas); 
                         document.getElementById('ficha-modal').style.display = 'flex';
                     };
                     visitasContainer.appendChild(card);
@@ -175,46 +194,59 @@ onAuthStateChanged(auth, async (user) => {
                 });
             });
 
-            // LOGICA GUARDAR MODAL (Escritura en subcolección de historial)
+            // LOGICA GUARDAR MODAL
             document.getElementById('btn-guardar-ficha').onclick = async () => {
                 const vId = window.miUsuario.visitaActivaId;
                 if (!vId) return;
 
                 const inputNotasVal = document.getElementById('ficha-notas').value.trim();
-                const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
+                const publiVal = document.getElementById('ficha-publi').value;
+                const videoVal = document.getElementById('ficha-video').value;
+                const proximoVal = document.getElementById('ficha-proximo').value.trim();
+                
+                let stringNotasFinal = window.miUsuario.visitaActivaNotas;
 
-                // 1. Guardar cambios estructurales de la ficha
+                if (inputNotasVal.length > 0) {
+                    const ahora = new Date();
+                    const fechaStr = `${ahora.getDate()} ${ahora.toLocaleString('es', { month: 'short' })}. ${ahora.getFullYear()} - ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`;
+                    const idFalso = Date.now().toString(); 
+                    
+                    let cuerpoMensaje = inputNotasVal;
+                    if (publiVal) cuerpoMensaje += `//📚 Publicación: ${publiVal}`;
+                    if (videoVal) cuerpoMensaje += `//🎬 Video: ${videoVal}`;
+                    if (proximoVal) cuerpoMensaje += `//➡️ Próximo paso: ${proximoVal}`;
+
+                    const nuevaEntrada = `${idFalso}&&${fechaStr}&&&${cuerpoMensaje}`;
+                    
+                    if (stringNotasFinal !== "") {
+                        stringNotasFinal += `||${nuevaEntrada}`;
+                    } else {
+                        stringNotasFinal = nuevaEntrada;
+                    }
+                }
+
+                const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
                 await updateDoc(docVisitaRef, {
                     nombre: document.getElementById('ficha-nombre').value.trim() || 'Nueva',
                     apellido: document.getElementById('ficha-apellido').value.trim() || 'Visita',
                     estado: document.getElementById('ficha-estado').value,
                     direccion: document.getElementById('ficha-direccion').value.trim(),
-                    publicacionDejada: document.getElementById('ficha-publi').value,
-                    videoVisto: document.getElementById('ficha-video').value,
-                    proximoPaso: document.getElementById('ficha-proximo').value.trim(),
-                    timestamp: Date.currentTimeMillis ? Date.currentTimeMillis() : Date.now()
+                    publicacionDejada: publiVal,
+                    videoVisto: videoVal,
+                    proximoPaso: proximoVal,
+                    notas: stringNotasFinal,
+                    timestamp: Date.now()
                 });
-
-                // 2. Si el hermano escribió algo en "Qué hablamos hoy", lo sumamos al chat
-                if (inputNotasVal.length > 0) {
-                    const subCollRef = collection(db, "usuarios", email, "mis_visitas", vId, "conversaciones");
-                    await addDoc(subCollRef, {
-                        notas: inputNotasVal,
-                        timestamp: Date.currentTimeMillis ? Date.currentTimeMillis() : Date.now()
-                    });
-                }
 
                 document.getElementById('ficha-modal').style.display = 'none';
             };
 
-            // MAP LOADING
+            // MAPA
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
-            
             const scriptMapa = document.createElement('script');
             scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}`;
             scriptMapa.async = true;
-            
             scriptMapa.onload = async () => {
                 const map = new google.maps.Map(document.getElementById("map"), { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
                 map.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
@@ -255,14 +287,12 @@ onAuthStateChanged(auth, async (user) => {
                 if (snapshotM.size > 0) { map.fitBounds(bounds); google.maps.event.trigger(map, 'zoom_changed'); }
             };
             document.head.appendChild(scriptMapa);
-
         } catch (error) { console.error(error); }
     } else {
         loginSection.style.display = 'block'; dashboardSection.style.display = 'none';
     }
 });
 
-// MOTOR PESTAÑAS
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.view-section');
 tabs.forEach(tab => {
@@ -273,7 +303,4 @@ tabs.forEach(tab => {
     });
 });
 
-document.getElementById('btn-cerrar-ficha').onclick = () => {
-    if (window.historialUnsubscribe) window.historialUnsubscribe();
-    document.getElementById('ficha-modal').style.display = 'none';
-};
+document.getElementById('btn-cerrar-ficha').onclick = () => document.getElementById('ficha-modal').style.display = 'none';
