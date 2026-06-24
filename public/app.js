@@ -5,18 +5,18 @@ import { getFirestore, collection, getDocs, doc, getDoc, query, where, onSnapsho
 
 // 2. SERVICE WORKER
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.error(err)));
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.error(err)));
 }
 
 // 3. CONFIGURACIÓN FIREBASE
 const firebaseConfig = {
-  apiKey: "AIzaSyALd_mItZYSLluocbxI8EUPle18UE4-8NQ",
-  authDomain: "territorios-a3ba5.firebaseapp.com",
-  projectId: "territorios-a3ba5",
-  storageBucket: "territorios-a3ba5.firebasestorage.app",
-  messagingSenderId: "745104413831",
-  appId: "1:745104413831:web:3dac44b13311aeff829422",
-  measurementId: "G-097G2Y8GRG"
+    apiKey: "AIzaSyALd_mItZYSLluocbxI8EUPle18UE4-8NQ",
+    authDomain: "territorios-a3ba5.firebaseapp.com",
+    projectId: "territorios-a3ba5",
+    storageBucket: "territorios-a3ba5.firebasestorage.app",
+    messagingSenderId: "745104413831",
+    appId: "1:745104413831:web:3dac44b13311aeff829422",
+    measurementId: "G-097G2Y8GRG"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -27,8 +27,11 @@ const provider = new GoogleAuthProvider();
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-console.log("🚀 MOTOR JS GEMELO (VERSIÓN 103 - MODO IPHONE ACTIVO) CARGADO");
+console.log("🚀 MOTOR JS GEMELO (VERSIÓN 105 - CÓDIGO LIMPIO + MODO REGISTRO) CARGADO");
 
+// ==========================================
+// LOGIN
+// ==========================================
 window.iniciarSesionGoogle = async () => {
     const btn = document.getElementById('btn-login');
     if (btn) btn.innerText = "Conectando con Google...";
@@ -39,8 +42,39 @@ window.iniciarSesionGoogle = async () => {
     }
 };
 
+// ==========================================
+// VARIABLES GLOBALES (MAPA Y REGISTRO)
+// ==========================================
 window.mapaGlobal = null;
 window.pinesVisitas = [];
+
+let modoRegistroActivo = false;
+let manzanasSeleccionadas = new Set(); 
+
+function refrescarEstilosMapa() {
+    if(!window.mapaGlobal) return;
+    
+    window.mapaGlobal.data.setStyle((feature) => {
+        const numTerritorio = feature.getProperty('territorio') || '-';
+        const numManzana = feature.getProperty('numero') || '-';
+        const etiqueta = `T${numTerritorio} - ${numManzana}`;
+        
+        let fillColor = feature.getProperty('fill') || '#6200EE';
+        let strokeColor = '#444444';
+        let strokeWeight = 1;
+        let fillOpacity = 0.35;
+
+        // Si la manzana fue tocada durante el Modo Registro, la pintamos de violeta intenso
+        if (modoRegistroActivo && manzanasSeleccionadas.has(etiqueta)) {
+            fillColor = '#6200EE';
+            fillOpacity = 0.7;
+            strokeColor = 'white';
+            strokeWeight = 3;
+        }
+
+        return { fillColor, strokeColor, strokeWeight, fillOpacity };
+    });
+}
 
 function obtenerColorPin(estado) {
     let color = '#E65100'; 
@@ -59,6 +93,9 @@ function obtenerColorPin(estado) {
     };
 }
 
+// ==========================================
+// EL CORAZÓN DE LA APLICACIÓN
+// ==========================================
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         if (loginSection) loginSection.style.display = 'none';
@@ -85,9 +122,78 @@ onAuthStateChanged(auth, async (user) => {
             
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "", tempLat: 0, tempLng: 0 };
 
+            // MOSTRAR PRIVILEGIOS DE ADMIN/CONDUCTOR
             const tabServicio = document.getElementById('tab-servicio');
-            if (tabServicio) tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
+            const btnFabRegistro = document.getElementById('btn-fab-registro');
+            
+            if (miRol === 'siervo' || miRol === 'ayudante' || miRol === 'conductor') {
+                if (tabServicio) tabServicio.style.display = 'block';
+                if (btnFabRegistro) btnFabRegistro.style.display = 'block';
+            }
 
+            // ==========================================
+            // LÓGICA DEL PANEL DE REGISTRO
+            // ==========================================
+            const panelRegistro = document.getElementById('panel-registro');
+            const contadorManzanas = document.getElementById('contador-manzanas');
+
+            if (btnFabRegistro) {
+                btnFabRegistro.onclick = () => {
+                    modoRegistroActivo = true;
+                    btnFabRegistro.style.display = 'none';
+                    panelRegistro.style.display = 'flex';
+                    manzanasSeleccionadas.clear();
+                    contadorManzanas.innerText = "0";
+                    refrescarEstilosMapa();
+                };
+            }
+
+            document.getElementById('btn-cerrar-registro').onclick = () => {
+                modoRegistroActivo = false;
+                panelRegistro.style.display = 'none';
+                btnFabRegistro.style.display = 'block';
+                manzanasSeleccionadas.clear();
+                refrescarEstilosMapa();
+            };
+
+            async function guardarReporteActividad(cobertura) {
+                if (manzanasSeleccionadas.size === 0) {
+                    alert("Por favor, toca al menos una manzana en el mapa antes de guardar.");
+                    return;
+                }
+                
+                let notas = "";
+                if (cobertura === "Parcial") {
+                    notas = prompt("Registro Parcial: ¿Qué parte faltó o qué debemos tener en cuenta?") || "";
+                }
+
+                try {
+                    const nuevoId = Date.now().toString();
+                    const nuevoDocRef = doc(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad", nuevoId);
+                    
+                    await setDoc(nuevoDocRef, {
+                        fecha: Date.now(),
+                        manzanas: Array.from(manzanasSeleccionadas),
+                        cobertura: cobertura,
+                        notas: notas,
+                        reportadoPor: window.miUsuario.nombre
+                    });
+
+                    alert(`¡Reporte ${cobertura} guardado con éxito!`);
+                    document.getElementById('btn-cerrar-registro').click(); // Cierra y resetea el mapa
+                } catch (error) {
+                    console.error("Error guardando reporte:", error);
+                    alert("Hubo un error al guardar el reporte.");
+                }
+            }
+
+            document.getElementById('btn-registro-completo').onclick = () => guardarReporteActividad("Completo");
+            document.getElementById('btn-registro-parcial').onclick = () => guardarReporteActividad("Parcial");
+
+
+            // ==========================================
+            // CARGA DE CONFIGURACIÓN Y VISITAS
+            // ==========================================
             const ministerioRef = doc(db, "configuracion", "ministerio");
             const ministerioSnap = await getDoc(ministerioRef);
             if (ministerioSnap.exists()) {
@@ -98,8 +204,16 @@ onAuthStateChanged(auth, async (user) => {
                 if (selectPubli) selectPubli.innerHTML = '<option value="">Ninguna</option>';
                 if (selectVideo) selectVideo.innerHTML = '<option value="">Ninguno</option>';
                 
-                if (dataMin.publicaciones && selectPubli) dataMin.publicaciones.forEach(pub => { const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); });
-                if (dataMin.videos && selectVideo) dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
+                if (dataMin.publicaciones && selectPubli) {
+                    dataMin.publicaciones.forEach(pub => { 
+                        const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); 
+                    });
+                }
+                if (dataMin.videos && selectVideo) {
+                    dataMin.videos.forEach(vid => { 
+                        const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); 
+                    });
+                }
             }
 
             const visitasContainer = document.getElementById('lista-visitas-container');
@@ -170,7 +284,9 @@ onAuthStateChanged(auth, async (user) => {
                             map: window.mapaGlobal,
                             icon: obtenerColorPin(visita.estado)
                         });
-                        pin.addListener('click', () => { abrirFichaVisita(visita); });
+                        pin.addListener('click', () => { 
+                            if(!modoRegistroActivo) abrirFichaVisita(visita); 
+                        });
                         window.pinesVisitas.push(pin);
                     }
 
@@ -199,18 +315,38 @@ onAuthStateChanged(auth, async (user) => {
                 window.miUsuario.tempLat = visita.latitud || 0;
                 window.miUsuario.tempLng = visita.longitud || 0;
 
-                const fn = document.getElementById('ficha-nombre'); if (fn) fn.value = visita.nombre !== 'Nueva' ? visita.nombre : '';
-                const fa = document.getElementById('ficha-apellido'); if (fa) fa.value = visita.apellido !== 'Visita' ? visita.apellido : '';
-                const ft = document.getElementById('ficha-terr'); if (ft) ft.innerText = visita.territorio || '-';
-                const fm = document.getElementById('ficha-manz'); if (fm) fm.innerText = visita.poligono || '-';
-                const fe = document.getElementById('ficha-estado'); if (fe) fe.value = visita.estado || 'Nueva';
-                const fd = document.getElementById('ficha-direccion'); if (fd) fd.value = visita.direccion || '';
-                const fp = document.getElementById('ficha-publi'); if (fp) fp.value = visita.publicacionDejada || '';
-                const fv = document.getElementById('ficha-video'); if (fv) fv.value = visita.videoVisto || '';
-                const fpx = document.getElementById('ficha-proximo'); if (fpx) fpx.value = visita.proximoPaso || '';
-                const fno = document.getElementById('ficha-notas'); if (fno) fno.value = ''; 
+                const inputNombre = document.getElementById('ficha-nombre');
+                if (inputNombre) inputNombre.value = visita.nombre !== 'Nueva' ? visita.nombre : '';
+                
+                const inputApellido = document.getElementById('ficha-apellido');
+                if (inputApellido) inputApellido.value = visita.apellido !== 'Visita' ? visita.apellido : '';
+                
+                const lblTerritorio = document.getElementById('ficha-terr');
+                if (lblTerritorio) lblTerritorio.innerText = visita.territorio || '-';
+                
+                const lblManzana = document.getElementById('ficha-manz');
+                if (lblManzana) lblManzana.innerText = visita.poligono || '-';
+                
+                const selectEstado = document.getElementById('ficha-estado');
+                if (selectEstado) selectEstado.value = visita.estado || 'Nueva';
+                
+                const inputDireccion = document.getElementById('ficha-direccion');
+                if (inputDireccion) inputDireccion.value = visita.direccion || '';
+                
+                const selectPubli = document.getElementById('ficha-publi');
+                if (selectPubli) selectPubli.value = visita.publicacionDejada || '';
+                
+                const selectVideo = document.getElementById('ficha-video');
+                if (selectVideo) selectVideo.value = visita.videoVisto || '';
+                
+                const inputProximo = document.getElementById('ficha-proximo');
+                if (inputProximo) inputProximo.value = visita.proximoPaso || '';
+                
+                const inputNotas = document.getElementById('ficha-notas');
+                if (inputNotas) inputNotas.value = ''; 
 
                 pintarGlobosHistorial(visita.notas); 
+                
                 const modal = document.getElementById('ficha-modal');
                 if (modal) modal.style.display = 'flex';
             }
@@ -218,21 +354,33 @@ onAuthStateChanged(auth, async (user) => {
             const chips = document.querySelectorAll('.filtro-chip');
             chips.forEach(chip => {
                 chip.addEventListener('click', (e) => {
-                    chips.forEach(c => c.classList.remove('active')); e.target.classList.add('active');
-                    filtroActual = e.target.getAttribute('data-filtro'); renderizarVisitas();
+                    chips.forEach(c => c.classList.remove('active')); 
+                    e.target.classList.add('active');
+                    filtroActual = e.target.getAttribute('data-filtro'); 
+                    renderizarVisitas();
                 });
             });
 
+            // ==========================================
+            // LOGICA GUARDAR MODAL
+            // ==========================================
             const btnGuardar = document.getElementById('btn-guardar-ficha');
             if (btnGuardar) {
                 btnGuardar.onclick = async () => {
                     const vId = window.miUsuario.visitaActivaId;
                     if (!vId) return;
 
-                    const inputNotasVal = document.getElementById('ficha-notas') ? document.getElementById('ficha-notas').value.trim() : '';
-                    const publiVal = document.getElementById('ficha-publi') ? document.getElementById('ficha-publi').value : '';
-                    const videoVal = document.getElementById('ficha-video') ? document.getElementById('ficha-video').value : '';
-                    const proximoVal = document.getElementById('ficha-proximo') ? document.getElementById('ficha-proximo').value.trim() : '';
+                    const inputNotasElement = document.getElementById('ficha-notas');
+                    const inputNotasVal = inputNotasElement ? inputNotasElement.value.trim() : '';
+                    
+                    const publiElement = document.getElementById('ficha-publi');
+                    const publiVal = publiElement ? publiElement.value : '';
+                    
+                    const videoElement = document.getElementById('ficha-video');
+                    const videoVal = videoElement ? videoElement.value : '';
+                    
+                    const proximoElement = document.getElementById('ficha-proximo');
+                    const proximoVal = proximoElement ? proximoElement.value.trim() : '';
                     
                     let stringNotasFinal = window.miUsuario.visitaActivaNotas;
 
@@ -248,7 +396,11 @@ onAuthStateChanged(auth, async (user) => {
 
                         const nuevaEntrada = `${idFalso}&&&${fechaStr}&&&${cuerpoMensaje}`;
                         
-                        if (stringNotasFinal !== "") stringNotasFinal += `||${nuevaEntrada}`; else stringNotasFinal = nuevaEntrada;
+                        if (stringNotasFinal !== "") {
+                            stringNotasFinal += `||${nuevaEntrada}`;
+                        } else {
+                            stringNotasFinal = nuevaEntrada;
+                        }
                     }
 
                     const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
@@ -274,77 +426,129 @@ onAuthStateChanged(auth, async (user) => {
                 };
             }
 
-            // MAPA Y CRONÓMETRO ANTI-IPHONE
+            // ==========================================
+            // MAPA Y EVENTOS DE SELECCIÓN
+            // ==========================================
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
+            
             if (llaveSnap.exists()) {
                 const scriptMapa = document.createElement('script');
                 scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}`;
                 scriptMapa.async = true;
+                
                 scriptMapa.onload = async () => {
                     const mapEl = document.getElementById("map");
                     if (!mapEl) return; 
 
-                    window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
-                    window.mapaGlobal.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
+                    window.mapaGlobal = new google.maps.Map(mapEl, { 
+                        disableDefaultUI: true, 
+                        zoomControl: false, 
+                        mapTypeControl: false, 
+                        streetViewControl: false 
+                    });
+                    
+                    refrescarEstilosMapa();
 
-                    // -- LÓGICA DE PULSO LARGO EXCLUSIVA PARA MÓVILES (CRONÓMETRO) --
-// -- TOQUE SIMPLE (Protegido nativamente contra arrastres por Google Maps) --
+                    // EVENTO PRINCIPAL: TOQUE EN LA MANZANA
                     window.mapaGlobal.data.addListener('click', (event) => {
                         const numManzana = event.feature.getProperty('numero') || '-'; 
                         const numTerritorio = event.feature.getProperty('territorio') || '-';
-                        const nuevoId = Date.now().toString(); 
-                        
-                        const visitaVacia = {
-                            id: nuevoId, nombre: 'Nueva', apellido: 'Visita',
-                            territorio: numTerritorio, poligono: numManzana,
-                            latitud: event.latLng.lat(), longitud: event.latLng.lng(),
-                            estado: 'Nueva', direccion: '', notas: ''
-                        };
-                        abrirFichaVisita(visitaVacia);
-                    });
+                        const etiqueta = `T${numTerritorio} - ${numManzana}`;
 
+                        if (modoRegistroActivo) {
+                            // MODO REGISTRO: Seleccionar/Deseleccionar
+                            if (manzanasSeleccionadas.has(etiqueta)) {
+                                manzanasSeleccionadas.delete(etiqueta);
+                            } else {
+                                manzanasSeleccionadas.add(etiqueta);
+                            }
+                            document.getElementById('contador-manzanas').innerText = manzanasSeleccionadas.size;
+                            refrescarEstilosMapa(); 
+                        } else {
+                            // MODO NORMAL: Nueva Visita
+                            const nuevoId = Date.now().toString(); 
+                            const visitaVacia = {
+                                id: nuevoId, nombre: 'Nueva', apellido: 'Visita',
+                                territorio: numTerritorio, poligono: numManzana,
+                                latitud: event.latLng.lat(), longitud: event.latLng.lng(),
+                                estado: 'Nueva', direccion: '', notas: ''
+                            };
+                            abrirFichaVisita(visitaVacia);
+                        }
+                    });
 
                     const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
                     const bounds = new google.maps.LatLngBounds();
-                    const marcadoresMicro = []; const marcadoresMacro = []; const agrupacionMacro = {};
+                    const marcadoresMicro = []; 
+                    const marcadoresMacro = []; 
+                    const agrupacionMacro = {};
 
-                    snapshotM.forEach(doc => { if (doc.data().geojson) window.mapaGlobal.data.addGeoJson(JSON.parse(doc.data().geojson)); });
+                    snapshotM.forEach(doc => { 
+                        if (doc.data().geojson) window.mapaGlobal.data.addGeoJson(JSON.parse(doc.data().geojson)); 
+                    });
+                    
                     window.mapaGlobal.data.forEach(feature => {
-                        const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
-                        const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
+                        const fBounds = new google.maps.LatLngBounds(); 
+                        feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
+                        
+                        const numManzana = feature.getProperty('numero') || ''; 
+                        const numTerritorio = feature.getProperty('territorio') || '';
+                        
                         if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
                         
                         const textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
-                        const mMicro = new google.maps.Marker({ position: fBounds.getCenter(), label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
+                        const mMicro = new google.maps.Marker({ 
+                            position: fBounds.getCenter(), 
+                            label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, 
+                            icon: { url: "", scaledSize: new google.maps.Size(0,0) } 
+                        });
                         marcadoresMicro.push(mMicro);
 
                         if (numTerritorio) {
                             if (!agrupacionMacro[numTerritorio]) agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
-                            agrupacionMacro[numTerritorio].latSum += fBounds.getCenter().lat(); agrupacionMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); agrupacionMacro[numTerritorio].count++;
+                            agrupacionMacro[numTerritorio].latSum += fBounds.getCenter().lat(); 
+                            agrupacionMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); 
+                            agrupacionMacro[numTerritorio].count++;
                         }
                     });
 
                     Object.keys(agrupacionMacro).forEach(t => {
                         const d = agrupacionMacro[t];
-                        const mMacro = new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
+                        const mMacro = new google.maps.Marker({ 
+                            position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, 
+                            label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, 
+                            icon: { url: "", scaledSize: new google.maps.Size(0,0) } 
+                        });
                         marcadoresMacro.push(mMacro);
                     });
 
                     window.mapaGlobal.addListener('zoom_changed', () => {
                         const z = window.mapaGlobal.getZoom();
-                        if (z >= 15.5) { marcadoresMicro.forEach(m => m.setMap(window.mapaGlobal)); marcadoresMacro.forEach(m => m.setMap(null)); } 
-                        else if (z >= 13) { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); } 
-                        else { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(null)); }
+                        if (z >= 15.5) { 
+                            marcadoresMicro.forEach(m => m.setMap(window.mapaGlobal)); 
+                            marcadoresMacro.forEach(m => m.setMap(null)); 
+                        } else if (z >= 13) { 
+                            marcadoresMicro.forEach(m => m.setMap(null)); 
+                            marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); 
+                        } else { 
+                            marcadoresMicro.forEach(m => m.setMap(null)); 
+                            marcadoresMacro.forEach(m => m.setMap(null)); 
+                        }
                     });
 
-                    if (snapshotM.size > 0) { window.mapaGlobal.fitBounds(bounds); google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); }
+                    if (snapshotM.size > 0) { 
+                        window.mapaGlobal.fitBounds(bounds); 
+                        google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); 
+                    }
                     
                     renderizarVisitas();
                 };
                 document.head.appendChild(scriptMapa);
             }
-        } catch (error) { console.error("Error capturado:", error); }
+        } catch (error) { 
+            console.error("Error capturado:", error); 
+        }
     } else {
         if (loginSection) loginSection.style.display = 'flex'; 
         if (dashboardSection) dashboardSection.style.display = 'none';
@@ -353,13 +557,26 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// ==========================================
+// TABS Y EVENTOS FUERA DE FIREBASE
+// ==========================================
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.view-section');
+
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active')); views.forEach(v => v.style.display = 'none');
-        tab.classList.add('active'); const tId = tab.getAttribute('data-target'); const tView = document.getElementById(tId);
-        if (tId === 'map-view' && tView) tView.style.display = 'flex'; else if (tView) tView.style.display = 'block';
+        tabs.forEach(t => t.classList.remove('active')); 
+        views.forEach(v => v.style.display = 'none');
+        
+        tab.classList.add('active'); 
+        const tId = tab.getAttribute('data-target'); 
+        const tView = document.getElementById(tId);
+        
+        if (tId === 'map-view' && tView) {
+            tView.style.display = 'flex'; 
+        } else if (tView) {
+            tView.style.display = 'block';
+        }
     });
 });
 
