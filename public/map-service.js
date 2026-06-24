@@ -6,8 +6,17 @@ window.pinesVisitas = [];
 let filtroActual = 'Todos';
 let todasLasVisitas = [];
 
+// NUEVO: Diccionarios para controlar qué manzanas están asignadas y sus textos en el mapa
+let mapasOcupados = {}; 
+let marcadoresMicroMap = {}; 
+
 export function refrescarEstilosMapa() {
-    if(!window.mapaGlobal) return;
+    if(!window.mapaGlobal || !window.miUsuario) return;
+    
+    const rol = window.miUsuario.rol;
+    const miNombre = window.miUsuario.nombre.trim().toLowerCase();
+
+    // 1. PINTAR LOS POLÍGONOS (COLORES)
     window.mapaGlobal.data.setStyle((feature) => {
         const numTerritorio = feature.getProperty('territorio') || '-';
         const numManzana = feature.getProperty('numero') || '-';
@@ -18,11 +27,42 @@ export function refrescarEstilosMapa() {
         let strokeWeight = 1;
         let fillOpacity = 0.35;
 
+        const asignadoA = mapasOcupados[etiqueta];
+        const estaOcupado = asignadoA !== undefined;
+        const esMio = estaOcupado && asignadoA.trim().toLowerCase() === miNombre;
+        const puedeVerBloqueo = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
+
         if (window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta)) {
-            fillColor = '#6200EE'; fillOpacity = 0.7; strokeColor = 'white'; strokeWeight = 3;
+            fillColor = '#6200EE'; fillOpacity = 0.7; strokeColor = 'white'; strokeWeight = 3; // Violeta de Selección
+        } else if (esMio) {
+            fillColor = '#4CAF50'; fillOpacity = 0.6; strokeColor = '#388E3C'; strokeWeight = 3; // Verde (REGLA 1: Mi territorio)
+        } else if (estaOcupado && puedeVerBloqueo) {
+            fillColor = '#424242'; fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2; // Gris Oscuro (REGLA 2 y 3: Territorio de otro)
         }
+        // Si no es mío, no soy conductor ni siervo, y está ocupado... se pinta normal. El publicador no se entera.
+
         return { fillColor, strokeColor, strokeWeight, fillOpacity };
     });
+
+    // 2. ACTUALIZAR LOS TEXTOS DE LAS MANZANAS
+    for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
+        const asignadoA = mapasOcupados[etiqueta];
+        const estaOcupado = asignadoA !== undefined;
+        const esMio = estaOcupado && asignadoA.trim().toLowerCase() === miNombre;
+
+        let textoMostrar = etiqueta;
+        
+        if (esMio) {
+            textoMostrar = `⭐ ${etiqueta}`; // REGLA 1: Es mío
+        } else if (estaOcupado && (rol === "siervo" || rol === "ayudante")) {
+            const soloNombre = asignadoA.split(' ')[0]; // Cortamos el apellido para que no tape el mapa
+            textoMostrar = `👤 ${etiqueta} (${soloNombre})`; // REGLA 3: Ve a quién se le asignó
+        } else if (estaOcupado && rol === "conductor") {
+            textoMostrar = `🔒 ${etiqueta}`; // REGLA 2: Bloqueado, pero no sabe quién lo tiene
+        }
+
+        marker.setLabel({ text: textoMostrar, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' });
+    }
 }
 
 function obtenerColorPin(estado) {
@@ -34,7 +74,18 @@ function obtenerColorPin(estado) {
 }
 
 export async function inicializarMapaYVisitas() {
-    // 1. Cargar Publicaciones en la Ficha
+    // 1. ESCUCHAR INVENTARIO (Para saber qué manzanas están ocupadas)
+    const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
+    onSnapshot(gestionRef, (snapshot) => {
+        mapasOcupados = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (!data.estaDisponible) mapasOcupados[doc.id] = data.asignadoA;
+        });
+        refrescarEstilosMapa(); // Cuando alguien asigna un mapa, el mapa se repinta solo
+    });
+
+    // 2. Cargar Publicaciones en la Ficha
     const ministerioSnap = await getDoc(doc(db, "configuracion", "ministerio"));
     if (ministerioSnap.exists()) {
         const dataMin = ministerioSnap.data();
@@ -43,7 +94,7 @@ export async function inicializarMapaYVisitas() {
         if (selectVideo && dataMin.videos) dataMin.videos.forEach(vid => { const o = document.createElement('option'); o.value = vid; o.textContent = vid; selectVideo.appendChild(o); });
     }
 
-    // 2. Escuchar la Libreta de Visitas
+    // 3. Escuchar la Libreta de Visitas
     const qVisitas = query(collection(db, "usuarios", window.miUsuario.email, "mis_visitas"), where("congregacionId", "==", window.miUsuario.congregacionId));
     onSnapshot(qVisitas, (snapshot) => {
         todasLasVisitas = [];
@@ -59,7 +110,7 @@ export async function inicializarMapaYVisitas() {
         });
     });
 
-    // 3. Guardar Ficha
+    // 4. Guardar Ficha
     const btnGuardar = document.getElementById('btn-guardar-ficha');
     if (btnGuardar) {
         btnGuardar.onclick = async () => {
@@ -84,7 +135,7 @@ export async function inicializarMapaYVisitas() {
         };
     }
 
-    // 4. Iniciar Google Maps
+    // 5. Iniciar Google Maps
     const llaveSnap = await getDoc(doc(db, "configuracion", "ApiKeys"));
     if (llaveSnap.exists()) {
         const scriptMapa = document.createElement('script');
@@ -112,7 +163,7 @@ export async function inicializarMapaYVisitas() {
 
             const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
             const bounds = new google.maps.LatLngBounds();
-            const marcadoresMicro = []; const marcadoresMacro = []; const agrupacionMacro = {};
+            const marcadoresMacro = []; const agrupacionMacro = {};
 
             snapshotM.forEach(doc => { if (doc.data().geojson) window.mapaGlobal.data.addGeoJson(JSON.parse(doc.data().geojson)); });
             
@@ -123,7 +174,8 @@ export async function inicializarMapaYVisitas() {
                 
                 const textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
                 const mMicro = new google.maps.Marker({ position: fBounds.getCenter(), label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
-                marcadoresMicro.push(mMicro);
+                
+                marcadoresMicroMap[textE] = mMicro; // Lo guardamos en el diccionario para cambiarle el texto después
 
                 if (numTerritorio) {
                     if (!agrupacionMacro[numTerritorio]) agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
@@ -138,13 +190,23 @@ export async function inicializarMapaYVisitas() {
 
             window.mapaGlobal.addListener('zoom_changed', () => {
                 const z = window.mapaGlobal.getZoom();
-                if (z >= 15.5) { marcadoresMicro.forEach(m => m.setMap(window.mapaGlobal)); marcadoresMacro.forEach(m => m.setMap(null)); } 
-                else if (z >= 13) { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); } 
-                else { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(null)); }
+                if (z >= 15.5) { 
+                    Object.values(marcadoresMicroMap).forEach(m => m.setMap(window.mapaGlobal)); 
+                    marcadoresMacro.forEach(m => m.setMap(null)); 
+                } 
+                else if (z >= 13) { 
+                    Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
+                    marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); 
+                } 
+                else { 
+                    Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
+                    marcadoresMacro.forEach(m => m.setMap(null)); 
+                }
             });
 
             if (snapshotM.size > 0) { window.mapaGlobal.fitBounds(bounds); google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); }
             renderizarVisitas();
+            refrescarEstilosMapa(); // Fuerza la primera pintura
         };
         document.head.appendChild(scriptMapa);
     }
