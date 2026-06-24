@@ -26,13 +26,16 @@ const btnLogin = document.getElementById('btn-login');
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 
-btnLogin.addEventListener('click', () => { signInWithRedirect(auth, provider); });
+if (btnLogin) {
+    btnLogin.addEventListener('click', () => { signInWithRedirect(auth, provider); });
+}
+
 getRedirectResult(auth).catch((error) => console.error(error));
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        loginSection.style.display = 'none';
-        dashboardSection.style.display = 'block';
+        if (loginSection) loginSection.style.display = 'none';
+        if (dashboardSection) dashboardSection.style.display = 'block';
 
         try {
             const email = user.email;
@@ -48,26 +51,40 @@ onAuthStateChanged(auth, async (user) => {
             const congSnap = await getDoc(congRef);
             if (congSnap.exists()) {
                 const congData = congSnap.data();
-                document.querySelector('.app-title').innerText = congData.nombre || `Congregación ${miCongregacionId}`;
+                
+                // ESCUDO DEFENSIVO PARA EL TÍTULO
+                const appTitleEl = document.querySelector('.app-title');
+                if (appTitleEl) {
+                    appTitleEl.innerText = congData.nombre || `Congregación ${miCongregacionId}`;
+                }
+
                 if (congData.roles && congData.roles[email]) miRol = congData.roles[email];
             }
             
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRol, congregacionId: miCongregacionId, visitaActivaId: null, visitaActivaNotas: "" };
 
             const tabServicio = document.getElementById('tab-servicio');
-            tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
+            if (tabServicio) {
+                tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
+            }
 
-            // CARGAR PUBLICACIONES DINÁMICAS
+            // CARGAR PUBLICACIONES DINÁMICAS (Con escudos)
             const ministerioRef = doc(db, "configuracion", "ministerio");
             const ministerioSnap = await getDoc(ministerioRef);
             if (ministerioSnap.exists()) {
                 const dataMin = ministerioSnap.data();
                 const selectPubli = document.getElementById('ficha-publi');
                 const selectVideo = document.getElementById('ficha-video');
-                selectPubli.innerHTML = '<option value="">Ninguna</option>';
-                selectVideo.innerHTML = '<option value="">Ninguno</option>';
-                if (dataMin.publicaciones) dataMin.publicaciones.forEach(pub => { const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); });
-                if (dataMin.videos) dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
+                
+                if (selectPubli) selectPubli.innerHTML = '<option value="">Ninguna</option>';
+                if (selectVideo) selectVideo.innerHTML = '<option value="">Ninguno</option>';
+                
+                if (dataMin.publicaciones && selectPubli) {
+                    dataMin.publicaciones.forEach(pub => { const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); });
+                }
+                if (dataMin.videos && selectVideo) {
+                    dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
+                }
             }
 
             // MOTOR DE VISITAS
@@ -85,9 +102,11 @@ onAuthStateChanged(auth, async (user) => {
                 renderizarVisitas();
             });
 
-            // EL TRADUCTOR REPARADO
+            // EL TRADUCTOR REPARADO Y BLINDADO
             function pintarGlobosHistorial(notasString) {
                 const chatContainer = document.getElementById('historial-conversaciones-container');
+                if (!chatContainer) return; // Escudo
+
                 chatContainer.innerHTML = '';
                 
                 if (!notasString || notasString.trim() === '') {
@@ -98,14 +117,13 @@ onAuthStateChanged(auth, async (user) => {
                 const entradas = notasString.split('||').filter(e => e.trim() !== '');
 
                 entradas.forEach(entrada => {
-                    // Ahora sí: Cortamos por &&& y esperamos 3 partes (ID, Fecha, Texto)
                     const partes = entrada.split('&&&');
                     let fechaStr = "Fecha desconocida";
                     let cuerpoTexto = "";
 
                     if (partes.length >= 3) {
-                        fechaStr = partes[1]; // La fecha siempre es el bloque del medio
-                        cuerpoTexto = partes.slice(2).join('&&&'); // Por si escribieron &&& en la nota
+                        fechaStr = partes[1]; 
+                        cuerpoTexto = partes.slice(2).join('&&&'); 
                     } else if (partes.length === 2) {
                         fechaStr = partes[0];
                         cuerpoTexto = partes[1];
@@ -151,20 +169,22 @@ onAuthStateChanged(auth, async (user) => {
                         window.miUsuario.visitaActivaId = visita.id;
                         window.miUsuario.visitaActivaNotas = visita.notas || "";
 
-                        document.getElementById('ficha-nombre').value = visita.nombre !== 'Nueva' ? visita.nombre : '';
-                        document.getElementById('ficha-apellido').value = visita.apellido !== 'Visita' ? visita.apellido : '';
-                        document.getElementById('ficha-terr').innerText = visita.territorio || '-';
-                        document.getElementById('ficha-manz').innerText = visita.poligono || '-';
-                        document.getElementById('ficha-estado').value = visita.estado || 'Nueva';
-                        document.getElementById('ficha-direccion').value = visita.direccion || '';
-                        document.getElementById('ficha-publi').value = visita.publicacionDejada || '';
-                        document.getElementById('ficha-video').value = visita.videoVisto || '';
-                        document.getElementById('ficha-proximo').value = visita.proximoPaso || '';
-
-                        document.getElementById('ficha-notas').value = ''; 
+                        // Escudos para todos los campos de la ficha
+                        const fn = document.getElementById('ficha-nombre'); if (fn) fn.value = visita.nombre !== 'Nueva' ? visita.nombre : '';
+                        const fa = document.getElementById('ficha-apellido'); if (fa) fa.value = visita.apellido !== 'Visita' ? visita.apellido : '';
+                        const ft = document.getElementById('ficha-terr'); if (ft) ft.innerText = visita.territorio || '-';
+                        const fm = document.getElementById('ficha-manz'); if (fm) fm.innerText = visita.poligono || '-';
+                        const fe = document.getElementById('ficha-estado'); if (fe) fe.value = visita.estado || 'Nueva';
+                        const fd = document.getElementById('ficha-direccion'); if (fd) fd.value = visita.direccion || '';
+                        const fp = document.getElementById('ficha-publi'); if (fp) fp.value = visita.publicacionDejada || '';
+                        const fv = document.getElementById('ficha-video'); if (fv) fv.value = visita.videoVisto || '';
+                        const fpx = document.getElementById('ficha-proximo'); if (fpx) fpx.value = visita.proximoPaso || '';
+                        const fno = document.getElementById('ficha-notas'); if (fno) fno.value = ''; 
 
                         pintarGlobosHistorial(visita.notas); 
-                        document.getElementById('ficha-modal').style.display = 'flex';
+                        
+                        const modal = document.getElementById('ficha-modal');
+                        if (modal) modal.style.display = 'flex';
                     };
                     visitasContainer.appendChild(card);
                 });
@@ -178,103 +198,112 @@ onAuthStateChanged(auth, async (user) => {
                 });
             });
 
-            // LOGICA GUARDAR MODAL REPARADA
-            document.getElementById('btn-guardar-ficha').onclick = async () => {
-                const vId = window.miUsuario.visitaActivaId;
-                if (!vId) return;
+            // LOGICA GUARDAR MODAL
+            const btnGuardar = document.getElementById('btn-guardar-ficha');
+            if (btnGuardar) {
+                btnGuardar.onclick = async () => {
+                    const vId = window.miUsuario.visitaActivaId;
+                    if (!vId) return;
 
-                const inputNotasVal = document.getElementById('ficha-notas').value.trim();
-                const publiVal = document.getElementById('ficha-publi').value;
-                const videoVal = document.getElementById('ficha-video').value;
-                const proximoVal = document.getElementById('ficha-proximo').value.trim();
-                
-                let stringNotasFinal = window.miUsuario.visitaActivaNotas;
-
-                if (inputNotasVal.length > 0) {
-                    const ahora = new Date();
-                    const fechaStr = `${ahora.getDate()} ${ahora.toLocaleString('es', { month: 'short' })}. ${ahora.getFullYear()} - ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`;
-                    const idFalso = Date.now().toString(); 
+                    const inputNotasVal = document.getElementById('ficha-notas') ? document.getElementById('ficha-notas').value.trim() : '';
+                    const publiVal = document.getElementById('ficha-publi') ? document.getElementById('ficha-publi').value : '';
+                    const videoVal = document.getElementById('ficha-video') ? document.getElementById('ficha-video').value : '';
+                    const proximoVal = document.getElementById('ficha-proximo') ? document.getElementById('ficha-proximo').value.trim() : '';
                     
-                    let cuerpoMensaje = inputNotasVal;
-                    if (publiVal) cuerpoMensaje += `//📚 Publicación: ${publiVal}`;
-                    if (videoVal) cuerpoMensaje += `//🎬 Video: ${videoVal}`;
-                    if (proximoVal) cuerpoMensaje += `//➡️ Próximo paso: ${proximoVal}`;
+                    let stringNotasFinal = window.miUsuario.visitaActivaNotas;
 
-                    // Ahora usamos TRES &&& para mantener la compatibilidad con Android
-                    const nuevaEntrada = `${idFalso}&&&${fechaStr}&&&${cuerpoMensaje}`;
-                    
-                    if (stringNotasFinal !== "") {
-                        stringNotasFinal += `||${nuevaEntrada}`;
-                    } else {
-                        stringNotasFinal = nuevaEntrada;
+                    if (inputNotasVal.length > 0) {
+                        const ahora = new Date();
+                        const fechaStr = `${ahora.getDate()} ${ahora.toLocaleString('es', { month: 'short' })}. ${ahora.getFullYear()} - ${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`;
+                        const idFalso = Date.now().toString(); 
+                        
+                        let cuerpoMensaje = inputNotasVal;
+                        if (publiVal) cuerpoMensaje += `//📚 Publicación: ${publiVal}`;
+                        if (videoVal) cuerpoMensaje += `//🎬 Video: ${videoVal}`;
+                        if (proximoVal) cuerpoMensaje += `//➡️ Próximo paso: ${proximoVal}`;
+
+                        const nuevaEntrada = `${idFalso}&&&${fechaStr}&&&${cuerpoMensaje}`;
+                        
+                        if (stringNotasFinal !== "") {
+                            stringNotasFinal += `||${nuevaEntrada}`;
+                        } else {
+                            stringNotasFinal = nuevaEntrada;
+                        }
                     }
-                }
 
-                const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
-                await updateDoc(docVisitaRef, {
-                    nombre: document.getElementById('ficha-nombre').value.trim() || 'Nueva',
-                    apellido: document.getElementById('ficha-apellido').value.trim() || 'Visita',
-                    estado: document.getElementById('ficha-estado').value,
-                    direccion: document.getElementById('ficha-direccion').value.trim(),
-                    publicacionDejada: publiVal,
-                    videoVisto: videoVal,
-                    proximoPaso: proximoVal,
-                    notas: stringNotasFinal,
-                    timestamp: Date.now()
-                });
+                    const docVisitaRef = doc(db, "usuarios", email, "mis_visitas", vId);
+                    await updateDoc(docVisitaRef, {
+                        nombre: document.getElementById('ficha-nombre') ? document.getElementById('ficha-nombre').value.trim() : 'Nueva',
+                        apellido: document.getElementById('ficha-apellido') ? document.getElementById('ficha-apellido').value.trim() : 'Visita',
+                        estado: document.getElementById('ficha-estado') ? document.getElementById('ficha-estado').value : 'Nueva',
+                        direccion: document.getElementById('ficha-direccion') ? document.getElementById('ficha-direccion').value.trim() : '',
+                        publicacionDejada: publiVal,
+                        videoVisto: videoVal,
+                        proximoPaso: proximoVal,
+                        notas: stringNotasFinal,
+                        timestamp: Date.now()
+                    });
 
-                document.getElementById('ficha-modal').style.display = 'none';
-            };
+                    const modal = document.getElementById('ficha-modal');
+                    if (modal) modal.style.display = 'none';
+                };
+            }
 
             // MAPA
             const llaveRef = doc(db, "configuracion", "ApiKeys");
             const llaveSnap = await getDoc(llaveRef);
-            const scriptMapa = document.createElement('script');
-            scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}`;
-            scriptMapa.async = true;
-            scriptMapa.onload = async () => {
-                const map = new google.maps.Map(document.getElementById("map"), { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
-                map.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
+            if (llaveSnap.exists()) {
+                const scriptMapa = document.createElement('script');
+                scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}`;
+                scriptMapa.async = true;
+                scriptMapa.onload = async () => {
+                    const mapEl = document.getElementById("map");
+                    if (!mapEl) return; // Escudo final
 
-                const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
-                const bounds = new google.maps.LatLngBounds();
-                const marcadoresMicro = []; const marcadoresMacro = []; const agrupacionMacro = {};
+                    const map = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
+                    map.data.setStyle((feature) => { return { fillColor: feature.getProperty('fill') || '#6200EE', strokeColor: '#444444', strokeWeight: 1, fillOpacity: 0.35 }; });
 
-                snapshotM.forEach(doc => { if (doc.data().geojson) map.data.addGeoJson(JSON.parse(doc.data().geojson)); });
-                map.data.forEach(feature => {
-                    const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
-                    const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
-                    if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
-                    
-                    const textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
-                    const mMicro = new google.maps.Marker({ position: fBounds.getCenter(), label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
-                    marcadoresMicro.push(mMicro);
+                    const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
+                    const bounds = new google.maps.LatLngBounds();
+                    const marcadoresMicro = []; const marcadoresMacro = []; const agrupacionMacro = {};
 
-                    if (numTerritorio) {
-                        if (!agrupacionMacro[numTerritorio]) agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
-                        agrupacionMacro[numTerritorio].latSum += fBounds.getCenter().lat(); agrupacionMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); agrupacionMacro[numTerritorio].count++;
-                    }
-                });
+                    snapshotM.forEach(doc => { if (doc.data().geojson) map.data.addGeoJson(JSON.parse(doc.data().geojson)); });
+                    map.data.forEach(feature => {
+                        const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
+                        const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
+                        if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
+                        
+                        const textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
+                        const mMicro = new google.maps.Marker({ position: fBounds.getCenter(), label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
+                        marcadoresMicro.push(mMicro);
 
-                Object.keys(agrupacionMacro).forEach(t => {
-                    const d = agrupacionMacro[t];
-                    const mMacro = new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
-                    marcadoresMacro.push(mMacro);
-                });
+                        if (numTerritorio) {
+                            if (!agrupacionMacro[numTerritorio]) agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
+                            agrupacionMacro[numTerritorio].latSum += fBounds.getCenter().lat(); agrupacionMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); agrupacionMacro[numTerritorio].count++;
+                        }
+                    });
 
-                map.addListener('zoom_changed', () => {
-                    const z = map.getZoom();
-                    if (z >= 15.5) { marcadoresMicro.forEach(m => m.setMap(map)); marcadoresMacro.forEach(m => m.setMap(null)); } 
-                    else if (z >= 13) { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(map)); } 
-                    else { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(null)); }
-                });
+                    Object.keys(agrupacionMacro).forEach(t => {
+                        const d = agrupacionMacro[t];
+                        const mMacro = new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
+                        marcadoresMacro.push(mMacro);
+                    });
 
-                if (snapshotM.size > 0) { map.fitBounds(bounds); google.maps.event.trigger(map, 'zoom_changed'); }
-            };
-            document.head.appendChild(scriptMapa);
-        } catch (error) { console.error(error); }
+                    map.addListener('zoom_changed', () => {
+                        const z = map.getZoom();
+                        if (z >= 15.5) { marcadoresMicro.forEach(m => m.setMap(map)); marcadoresMacro.forEach(m => m.setMap(null)); } 
+                        else if (z >= 13) { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(map)); } 
+                        else { marcadoresMicro.forEach(m => m.setMap(null)); marcadoresMacro.forEach(m => m.setMap(null)); }
+                    });
+
+                    if (snapshotM.size > 0) { map.fitBounds(bounds); google.maps.event.trigger(map, 'zoom_changed'); }
+                };
+                document.head.appendChild(scriptMapa);
+            }
+        } catch (error) { console.error("Error capturado:", error); }
     } else {
-        loginSection.style.display = 'flex'; dashboardSection.style.display = 'none';
+        if (loginSection) loginSection.style.display = 'flex'; 
+        if (dashboardSection) dashboardSection.style.display = 'none';
     }
 });
 
@@ -284,8 +313,14 @@ tabs.forEach(tab => {
     tab.addEventListener('click', () => {
         tabs.forEach(t => t.classList.remove('active')); views.forEach(v => v.style.display = 'none');
         tab.classList.add('active'); const tId = tab.getAttribute('data-target'); const tView = document.getElementById(tId);
-        if (tId === 'map-view') tView.style.display = 'flex'; else tView.style.display = 'block';
+        if (tId === 'map-view' && tView) tView.style.display = 'flex'; else if (tView) tView.style.display = 'block';
     });
 });
 
-document.getElementById('btn-cerrar-ficha').onclick = () => document.getElementById('ficha-modal').style.display = 'none';
+const btnCerrarFicha = document.getElementById('btn-cerrar-ficha');
+if (btnCerrarFicha) {
+    btnCerrarFicha.onclick = () => {
+        const modal = document.getElementById('ficha-modal');
+        if (modal) modal.style.display = 'none';
+    };
+}
