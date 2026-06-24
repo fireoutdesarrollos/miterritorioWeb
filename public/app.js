@@ -57,41 +57,20 @@ onAuthStateChanged(auth, async (user) => {
             const tabServicio = document.getElementById('tab-servicio');
             tabServicio.style.display = (miRol === 'siervo' || miRol === 'ayudante') ? 'block' : 'none';
 
-            // ==========================================
-            // NUEVO: CARGAR PUBLICACIONES Y VIDEOS DINÁMICOS
-            // ==========================================
+            // CARGAR PUBLICACIONES DINÁMICAS
             const ministerioRef = doc(db, "configuracion", "ministerio");
             const ministerioSnap = await getDoc(ministerioRef);
             if (ministerioSnap.exists()) {
                 const dataMin = ministerioSnap.data();
                 const selectPubli = document.getElementById('ficha-publi');
                 const selectVideo = document.getElementById('ficha-video');
-
-                // Vaciamos los fijos y dejamos solo la opción neutra
                 selectPubli.innerHTML = '<option value="">Ninguna</option>';
                 selectVideo.innerHTML = '<option value="">Ninguno</option>';
-
-                // Inyectamos las publicaciones de Firebase
-                if (dataMin.publicaciones && Array.isArray(dataMin.publicaciones)) {
-                    dataMin.publicaciones.forEach(pub => {
-                        const opt = document.createElement('option');
-                        opt.value = pub; opt.textContent = pub;
-                        selectPubli.appendChild(opt);
-                    });
-                }
-
-                // Inyectamos los videos de Firebase
-                if (dataMin.videos && Array.isArray(dataMin.videos)) {
-                    dataMin.videos.forEach(vid => {
-                        const opt = document.createElement('option');
-                        opt.value = vid; opt.textContent = vid;
-                        selectVideo.appendChild(opt);
-                    });
-                }
+                if (dataMin.publicaciones) dataMin.publicaciones.forEach(pub => { const opt = document.createElement('option'); opt.value = pub; opt.textContent = pub; selectPubli.appendChild(opt); });
+                if (dataMin.videos) dataMin.videos.forEach(vid => { const opt = document.createElement('option'); opt.value = vid; opt.textContent = vid; selectVideo.appendChild(opt); });
             }
-            // ==========================================
 
-            // MOTOR DE VISITAS Y TRADUCTOR DE TEXTO
+            // MOTOR DE VISITAS
             const visitasContainer = document.getElementById('lista-visitas-container');
             let todasLasVisitas = []; 
             let filtroActual = 'Todos';
@@ -106,6 +85,7 @@ onAuthStateChanged(auth, async (user) => {
                 renderizarVisitas();
             });
 
+            // EL TRADUCTOR REPARADO
             function pintarGlobosHistorial(notasString) {
                 const chatContainer = document.getElementById('historial-conversaciones-container');
                 chatContainer.innerHTML = '';
@@ -118,14 +98,20 @@ onAuthStateChanged(auth, async (user) => {
                 const entradas = notasString.split('||').filter(e => e.trim() !== '');
 
                 entradas.forEach(entrada => {
+                    // Ahora sí: Cortamos por &&& y esperamos 3 partes (ID, Fecha, Texto)
                     const partes = entrada.split('&&&');
-                    if (partes.length < 2) return;
+                    let fechaStr = "Fecha desconocida";
+                    let cuerpoTexto = "";
 
-                    const cabecera = partes[0];
-                    let cuerpoTexto = partes[1];
-
-                    const cabeceraPartes = cabecera.split('&&');
-                    const fechaStr = cabeceraPartes.length > 1 ? cabeceraPartes[1] : cabeceraPartes[0];
+                    if (partes.length >= 3) {
+                        fechaStr = partes[1]; // La fecha siempre es el bloque del medio
+                        cuerpoTexto = partes.slice(2).join('&&&'); // Por si escribieron &&& en la nota
+                    } else if (partes.length === 2) {
+                        fechaStr = partes[0];
+                        cuerpoTexto = partes[1];
+                    } else {
+                        cuerpoTexto = entrada;
+                    }
 
                     const textoLimpio = cuerpoTexto.replace(/\/\//g, '<br><br>• ');
 
@@ -171,8 +157,6 @@ onAuthStateChanged(auth, async (user) => {
                         document.getElementById('ficha-manz').innerText = visita.poligono || '-';
                         document.getElementById('ficha-estado').value = visita.estado || 'Nueva';
                         document.getElementById('ficha-direccion').value = visita.direccion || '';
-                        
-                        // Asignamos publicación y video (ahora son dinámicos)
                         document.getElementById('ficha-publi').value = visita.publicacionDejada || '';
                         document.getElementById('ficha-video').value = visita.videoVisto || '';
                         document.getElementById('ficha-proximo').value = visita.proximoPaso || '';
@@ -194,7 +178,7 @@ onAuthStateChanged(auth, async (user) => {
                 });
             });
 
-            // LOGICA GUARDAR MODAL
+            // LOGICA GUARDAR MODAL REPARADA
             document.getElementById('btn-guardar-ficha').onclick = async () => {
                 const vId = window.miUsuario.visitaActivaId;
                 if (!vId) return;
@@ -216,7 +200,8 @@ onAuthStateChanged(auth, async (user) => {
                     if (videoVal) cuerpoMensaje += `//🎬 Video: ${videoVal}`;
                     if (proximoVal) cuerpoMensaje += `//➡️ Próximo paso: ${proximoVal}`;
 
-                    const nuevaEntrada = `${idFalso}&&${fechaStr}&&&${cuerpoMensaje}`;
+                    // Ahora usamos TRES &&& para mantener la compatibilidad con Android
+                    const nuevaEntrada = `${idFalso}&&&${fechaStr}&&&${cuerpoMensaje}`;
                     
                     if (stringNotasFinal !== "") {
                         stringNotasFinal += `||${nuevaEntrada}`;
@@ -289,7 +274,7 @@ onAuthStateChanged(auth, async (user) => {
             document.head.appendChild(scriptMapa);
         } catch (error) { console.error(error); }
     } else {
-        loginSection.style.display = 'block'; dashboardSection.style.display = 'none';
+        loginSection.style.display = 'flex'; dashboardSection.style.display = 'none';
     }
 });
 

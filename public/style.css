@@ -38,32 +38,32 @@ body, html {
 }
 
 /* =========================================
-   PANTALLA DE LOGIN (Centrada)
+   PANTALLA DE LOGIN (Centrada y Única)
    ========================================= */
 #login-section {
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 24px;
-    text-align: center;
-    box-sizing: border-box;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
 }
 
-button {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 14px 24px;
-    font-size: 1.1rem;
-    border-radius: var(--border-radius);
-    width: 100%;
-    margin-top: 20px;
-    cursor: pointer;
-    font-weight: bold;
+#login-section img {
+    width: 120px;
+    border-radius: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-button:active {
-    opacity: 0.8;
+#btn-login {
+    width: 80%;
+    max-width: 300px;
 }
 
 /* =========================================
