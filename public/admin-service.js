@@ -154,7 +154,10 @@ export function configurarPanelAdmin() {
 
     document.querySelectorAll('.btn-volver-admin').forEach(btn => btn.onclick = () => history.back());
 
-    // 1. REPORTES Y ESTADÍSTICAS
+// 1. REPORTES Y ESTADÍSTICAS (CLON DE ANDROID)
+    let todosLosReportes = []; 
+    let todosLosTerritorios = new Set(); // Para saber qué manzanas existen y calcular atrasos
+
     const btnAdminReportes = document.getElementById('btn-admin-reportes');
     if (btnAdminReportes) {
         btnAdminReportes.onclick = () => {
@@ -162,41 +165,203 @@ export function configurarPanelAdmin() {
             if (adminDashboard) adminDashboard.style.display = 'none'; 
             if (viewReportes) viewReportes.style.display = 'block';
             
-            onSnapshot(collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad"), (snapshot) => {
-                const listaHtml = document.getElementById('lista-reportes'); 
-                if (!listaHtml) return;
-                listaHtml.innerHTML = '';
-                let reportes = [];
-                snapshot.forEach(doc => reportes.push({id: doc.id, ...doc.data()}));
-                reportes.sort((a,b) => b.fecha - a.fecha);
-                
-                if(reportes.length === 0) { 
-                    listaHtml.innerHTML = '<p style="color:gray;text-align:center;margin-top:40px;">No hay reportes de actividad todavía.</p>'; 
-                    return; 
-                }
-
-                reportes.forEach(rep => {
-                    const d = new Date(rep.fecha);
-                    const fStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} - ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
-                    const colorBadge = rep.cobertura === 'Completo' ? '#388E3C' : '#E65100';
+            const viewContenedor = document.getElementById('admin-reportes-view');
+            const listaHtml = document.getElementById('lista-reportes'); 
+            
+            // CONSTRUIR LA INTERFAZ IGUAL A ANDROID (Chips de Filtro y Pestañas)
+            let headerReportes = document.getElementById('header-reportes-clon');
+            if (!headerReportes && viewContenedor && listaHtml) {
+                headerReportes = document.createElement('div');
+                headerReportes.id = 'header-reportes-clon';
+                headerReportes.innerHTML = `
+                    <div style="display: flex; gap: 8px; margin-bottom: 15px; border-bottom: 2px solid var(--border-color);">
+                        <button id="tab-historial" style="flex: 1; background: none; border: none; padding: 10px; font-weight: bold; color: var(--primary-color); border-bottom: 3px solid var(--primary-color); cursor: pointer;">Historial</button>
+                        <button id="tab-atrasados" style="flex: 1; background: none; border: none; padding: 10px; font-weight: bold; color: gray; border-bottom: 3px solid transparent; cursor: pointer;">Más Atrasados</button>
+                    </div>
                     
-                    const card = document.createElement('div'); 
-                    card.className = 'admin-reporte-card';
-                    card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:gray; font-size:13px; font-weight:bold;">${fStr}</span>
-                            <span style="background:${colorBadge}20; color:${colorBadge}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:900;">${rep.cobertura.toUpperCase()}</span>
+                    <div id="contenedor-historial">
+                        <button id="btn-exportar-s13" style="width: 100%; background-color: var(--primary-color); color: white; border-radius: 12px; padding: 14px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            📄 Descargar S-13 (PDF)
+                        </button>
+                        <div class="visitas-filtros" style="margin-bottom: 15px;">
+                            <div class="filtro-chip active" data-filtro="1mes">Último Mes</div>
+                            <div class="filtro-chip" data-filtro="6meses">Últimos 6 Meses</div>
+                            <div class="filtro-chip" data-filtro="rango" id="chip-rango">Rango Personalizado</div>
                         </div>
-                        <p style="margin: 10px 0 5px 0; font-weight:bold; color:var(--text-color); font-size:15px;">Manzanas: <span style="color:var(--primary-color);">${rep.manzanas.join(', ')}</span></p>
-                        <p style="margin: 0; font-size:14px; color:gray;">👤 Por: ${rep.reportadoPor}</p>
-                        ${rep.notes || rep.notas ? `<div style="margin-top:10px; background:rgba(128,128,128,0.1); padding:10px; border-radius:8px; font-size:13px; color:var(--text-color, #444);">📝 ${rep.notes || rep.notas}</div>` : ''}
-                    `;
-                    listaHtml.appendChild(card);
+                        <div id="panel-fechas-rango" style="display: none; gap: 10px; margin-bottom: 15px; background: var(--surface-color); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color);">
+                            <div style="flex: 1;">
+                                <label style="font-size: 11px; color: gray; font-weight: bold;">Desde</label>
+                                <input type="date" id="filtro-desde" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color);">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 11px; color: gray; font-weight: bold;">Hasta</label>
+                                <input type="date" id="filtro-hasta" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color);">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                viewContenedor.insertBefore(headerReportes, listaHtml);
+
+                // Lógica de Pestañas
+                document.getElementById('tab-historial').onclick = (e) => {
+                    e.target.style.color = 'var(--primary-color)'; e.target.style.borderBottomColor = 'var(--primary-color)';
+                    document.getElementById('tab-atrasados').style.color = 'gray'; document.getElementById('tab-atrasados').style.borderBottomColor = 'transparent';
+                    document.getElementById('contenedor-historial').style.display = 'block';
+                    window.pestanaReportesActiva = 'historial';
+                    renderizarReportesFiltrados();
+                };
+                document.getElementById('tab-atrasados').onclick = (e) => {
+                    e.target.style.color = 'var(--primary-color)'; e.target.style.borderBottomColor = 'var(--primary-color)';
+                    document.getElementById('tab-historial').style.color = 'gray'; document.getElementById('tab-historial').style.borderBottomColor = 'transparent';
+                    document.getElementById('contenedor-historial').style.display = 'none';
+                    window.pestanaReportesActiva = 'atrasados';
+                    renderizarReportesFiltrados();
+                };
+
+                // Lógica de Chips (Filtros de Tiempo)
+                window.filtroTiempoActivo = '1mes';
+                const chipsFiltro = headerReportes.querySelectorAll('.filtro-chip');
+                chipsFiltro.forEach(chip => {
+                    chip.onclick = (e) => {
+                        chipsFiltro.forEach(c => c.classList.remove('active'));
+                        e.target.classList.add('active');
+                        window.filtroTiempoActivo = e.target.getAttribute('data-filtro');
+                        
+                        const panelFechas = document.getElementById('panel-fechas-rango');
+                        if (window.filtroTiempoActivo === 'rango') {
+                            panelFechas.style.display = 'flex';
+                        } else {
+                            panelFechas.style.display = 'none';
+                        }
+                        renderizarReportesFiltrados();
+                    };
                 });
+
+                document.getElementById('filtro-desde').addEventListener('change', renderizarReportesFiltrados);
+                document.getElementById('filtro-hasta').addEventListener('change', renderizarReportesFiltrados);
+            }
+            
+            // Traer Manzanas Existentes (Para el cálculo de atrasados)
+            if(window.mapaGlobal) {
+                todosLosTerritorios.clear();
+                window.mapaGlobal.data.forEach(f => {
+                    const t = f.getProperty('territorio'); const m = f.getProperty('numero');
+                    if(t && m && m.toLowerCase() !== 'plaza') todosLosTerritorios.add(`T${t} - ${m}`);
+                });
+            }
+
+            // Escuchar Reportes de Firebase
+            onSnapshot(collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad"), (snapshot) => {
+                todosLosReportes = [];
+                snapshot.forEach(doc => todosLosReportes.push({id: doc.id, ...doc.data()}));
+                todosLosReportes.sort((a,b) => b.fecha - a.fecha);
+                renderizarReportesFiltrados();
             });
         };
     }
 
+    // MOTOR GEMELO DE RENDERIZADO (ANDROID)
+    function renderizarReportesFiltrados() {
+        const listaHtml = document.getElementById('lista-reportes'); 
+        if (!listaHtml) return;
+        listaHtml.innerHTML = '';
+        
+        if (window.pestanaReportesActiva === 'atrasados') {
+            // LÓGICA: MÁS ATRASADOS
+            let ultimaVez = {};
+            todosLosReportes.forEach(reporte => {
+                reporte.manzanas.forEach(m => {
+                    if (!ultimaVez[m]) ultimaVez[m] = reporte.fecha;
+                });
+            });
+
+            let ranking = Array.from(todosLosTerritorios).map(m => ({
+                manzana: m,
+                fechaUltima: ultimaVez[m] || 0
+            })).sort((a, b) => a.fechaUltima - b.fechaUltima);
+
+            ranking.forEach(item => {
+                const nunca = item.fechaUltima === 0;
+                const dias = nunca ? 0 : Math.floor((Date.now() - item.fechaUltima) / (1000 * 60 * 60 * 24));
+                const txt = nunca ? "Nunca reportado" : `Hace ${dias} días`;
+                const cBg = nunca ? "var(--error-container, #FFEBEE)" : "var(--surface-color)";
+                const cTx = nunca ? "var(--error-color, #C62828)" : "gray";
+
+                const card = document.createElement('div'); 
+                card.className = 'admin-reporte-card';
+                card.style.backgroundColor = cBg;
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold; color:var(--text-color); font-size:16px;">Manzana ${item.manzana}</span>
+                        <span style="font-weight:bold; color:${cTx}; font-size:14px;">${txt}</span>
+                    </div>
+                `;
+                listaHtml.appendChild(card);
+            });
+            return;
+        }
+
+        // LÓGICA: HISTORIAL (CON FILTROS DE TIEMPO)
+        let reportesFiltrados = todosLosReportes;
+        const hoy = Date.now();
+
+        if (window.filtroTiempoActivo === '1mes') {
+            const hace1Mes = hoy - (30 * 24 * 60 * 60 * 1000);
+            reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hace1Mes);
+        } else if (window.filtroTiempoActivo === '6meses') {
+            const hace6Meses = hoy - (180 * 24 * 60 * 60 * 1000);
+            reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hace6Meses);
+        } else if (window.filtroTiempoActivo === 'rango') {
+            const fechaDesdeStr = document.getElementById('filtro-desde')?.value;
+            const fechaHastaStr = document.getElementById('filtro-hasta')?.value;
+            if (fechaDesdeStr) {
+                const msDesde = new Date(fechaDesdeStr + "T00:00:00").getTime();
+                reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= msDesde);
+            }
+            if (fechaHastaStr) {
+                const msHasta = new Date(fechaHastaStr + "T23:59:59").getTime();
+                reportesFiltrados = reportesFiltrados.filter(r => r.fecha <= msHasta);
+            }
+        }
+        
+        if(reportesFiltrados.length === 0) { 
+            listaHtml.innerHTML = '<p style="color:gray;text-align:center;margin-top:40px;">No hay actividad en este período.</p>'; 
+            return; 
+        }
+
+        reportesFiltrados.forEach(rep => {
+            const d = new Date(rep.fecha);
+            const fStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} - ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+            const colorBadge = rep.cobertura === 'Completo' ? '#388E3C' : '#E65100';
+            
+            // Formateador exacto al de Android
+            const agrupados = {};
+            rep.manzanas.forEach(m => {
+                const base = m.split('-')[0].trim();
+                if (!agrupados[base]) agrupados[base] = [];
+                agrupados[base].push(m);
+            });
+            const textoTerritorios = Object.keys(agrupados).map(base => {
+                if (rep.cobertura === 'Completo') return base;
+                const numeros = agrupados[base].map(x => x.split('-')[1]?.trim() || "Completa").join(", ");
+                return `${base} (Mz: ${numeros})`;
+            }).join(" | ");
+
+            const card = document.createElement('div'); 
+            card.className = 'admin-reporte-card';
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:gray; font-size:13px; font-weight:bold;">${fStr}</span>
+                    <span style="background:${colorBadge}20; color:${colorBadge}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:900;">${rep.cobertura.toUpperCase()}</span>
+                </div>
+                <p style="margin: 10px 0 5px 0; font-weight:bold; color:var(--text-color); font-size:15px;">Territorios: <span style="color:var(--primary-color);">${textoTerritorios}</span></p>
+                <p style="margin: 0; font-size:14px; color:gray;">👤 Por: ${rep.reportadoPor}</p>
+                ${rep.notes || rep.notas ? `<div style="margin-top:10px; background:rgba(128,128,128,0.1); padding:10px; border-radius:8px; font-size:13px; color:var(--text-color, #444);">📝 ${rep.notes || rep.notas}</div>` : ''}
+            `;
+            listaHtml.appendChild(card);
+        });
+    }
+      
     // 2. GESTIÓN DE TERRITORIOS (INVENTARIO)
     let seleccionadosInventario = new Set();
     let mapasEstadoGlobal = {};
