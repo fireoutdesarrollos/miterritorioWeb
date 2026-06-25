@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: admin-service.js
+// ARCHIVO: admin-service.js (VERSIÓN DEFINITIVA S-13)
 // ==========================================
 import { collection, doc, setDoc, onSnapshot, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
@@ -8,90 +8,10 @@ import { refrescarEstilosMapa } from "./map-service.js";
 window.modoRegistroActivo = false;
 window.manzanasSeleccionadas = new Set();
 
-// ==========================================
-// GENERADOR DE PDF (FORMULARIO S-13)
-// ==========================================
-async function generarPDF_S13() {
-    // Inicializamos la librería de PDF
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    // Título y Encabezado
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("Registro de Asignación de Territorios (S-13)", 14, 20);
-    
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Congregación: ${window.miUsuario.congregacionId}`, 14, 28);
-    const fechaHoy = new Date().toLocaleDateString('es-ES');
-    doc.text(`Fecha de exportación: ${fechaHoy}`, 14, 34);
-
-    // Traemos los datos frescos de la base de datos
-    const snapshot = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas"));
-    let datosTabla = [];
-
-    snapshot.forEach(d => {
-        const mapa = d.id; // Ej: T1 - A
-        const data = d.data();
-        
-        // Filtramos solo los que están actualmente asignados (No disponibles)
-        if (!data.estaDisponible && data.fecha) {
-            const fSalida = new Date(data.fecha);
-            const fVencimiento = new Date(data.fecha);
-            fVencimiento.setMonth(fVencimiento.getMonth() + (data.duracionMeses || 4));
-
-            const diasRestantes = Math.ceil((fVencimiento - new Date()) / (1000 * 60 * 60 * 24));
-            let estado = diasRestantes < 0 ? "VENCIDO" : "Al día";
-
-            datosTabla.push([
-                mapa,
-                data.asignadoA || "Desconocido",
-                fSalida.toLocaleDateString('es-ES'),
-                fVencimiento.toLocaleDateString('es-ES'),
-                estado
-            ]);
-        }
-    });
-
-    // Ordenamos la tabla alfabéticamente por Territorio (Ej: T1, T2, T3)
-    datosTabla.sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric: true}));
-
-    if (datosTabla.length === 0) {
-        alert("No hay territorios asignados para generar el reporte S-13.");
-        return;
-    }
-
-    // Dibujamos la tabla automática
-    doc.autoTable({
-        startY: 42,
-        head: [['Territorio / Manzana', 'Publicador Asignado', 'F. Salida', 'Vence', 'Estado']],
-        body: datosTabla,
-        theme: 'striped',
-        headStyles: { fillColor: [168, 117, 255] }, // Tu color violeta (--primary-color)
-        styles: { fontSize: 10, cellPadding: 4 },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
-        columnStyles: {
-            4: { fontStyle: 'bold', textColor: [0, 0, 0] } 
-        },
-        // Cambiar color del texto si está vencido
-        didParseCell: function(data) {
-            if (data.section === 'body' && data.column.index === 4) {
-                if (data.cell.raw === 'VENCIDO') {
-                    data.cell.styles.textColor = [198, 40, 40]; // Rojo
-                } else {
-                    data.cell.styles.textColor = [46, 125, 50]; // Verde
-                }
-            }
-        }
-    });
-
-    // Guardar y descargar el archivo
-    const nombreArchivo = `S-13_Congregacion_${window.miUsuario.congregacionId}_${fechaHoy.replace(/\//g, '-')}.pdf`;
-    doc.save(nombreArchivo);
-}
-
 export function configurarPanelAdmin() {
+    // ==========================================
+    // CONTROLES DE REGISTRO EN MAPA
+    // ==========================================
     const btnFabRegistro = document.getElementById('btn-fab-registro');
     const panelRegistro = document.getElementById('panel-registro');
     const contadorManzanas = document.getElementById('contador-manzanas');
@@ -120,7 +40,6 @@ export function configurarPanelAdmin() {
 
     async function guardarReporteActividad(cobertura) {
         if (window.manzanasSeleccionadas.size === 0) return alert("Toca al menos una manzana en el mapa.");
-        
         let notas = "";
         if (cobertura === "Parcial") notas = prompt("Registro Parcial: ¿Qué parte faltó?") || "";
 
@@ -130,7 +49,8 @@ export function configurarPanelAdmin() {
                 fecha: Date.now(),
                 manzanas: Array.from(window.manzanasSeleccionadas),
                 cobertura: cobertura,
-                notes: notas,
+                notas: notas,
+                notes: notas, // Guardamos ambas para compatibilidad
                 reportadoPor: window.miUsuario.nombre
             });
             alert(`¡Reporte ${cobertura} guardado!`);
@@ -146,7 +66,9 @@ export function configurarPanelAdmin() {
     const btnRegParcial = document.getElementById('btn-registro-parcial');
     if (btnRegParcial) btnRegParcial.onclick = () => guardarReporteActividad("Parcial");
 
-    // LÓGICA DE LAS PESTAÑAS INTERNAS DE SERVICIO
+    // ==========================================
+    // PESTAÑAS INTERNAS DE SERVICIO
+    // ==========================================
     const adminDashboard = document.getElementById('admin-dashboard');
     const viewInventario = document.getElementById('admin-inventario-view');
     const viewReportes = document.getElementById('admin-reportes-view');
@@ -154,21 +76,27 @@ export function configurarPanelAdmin() {
 
     document.querySelectorAll('.btn-volver-admin').forEach(btn => btn.onclick = () => history.back());
 
-// 1. REPORTES Y ESTADÍSTICAS (CLON DE ANDROID)
+   // -----------------------------------------------------------
+    // 1. REPORTES, ESTADÍSTICAS Y PDF S-13
+    // -----------------------------------------------------------
     let todosLosReportes = []; 
-    let todosLosTerritorios = new Set(); // Para saber qué manzanas existen y calcular atrasos
+    let todosLosTerritorios = new Set(); 
 
     const btnAdminReportes = document.getElementById('btn-admin-reportes');
     if (btnAdminReportes) {
         btnAdminReportes.onclick = () => {
             history.pushState({ page: 'admin_sub' }, '', '');
+            
+            // Declaramos las vistas de forma segura
+            const adminDashboard = document.getElementById('admin-dashboard');
+            const viewReportes = document.getElementById('admin-reportes-view');
+            
             if (adminDashboard) adminDashboard.style.display = 'none'; 
             if (viewReportes) viewReportes.style.display = 'block';
             
             const viewContenedor = document.getElementById('admin-reportes-view');
             const listaHtml = document.getElementById('lista-reportes'); 
             
-            // CONSTRUIR LA INTERFAZ IGUAL A ANDROID (Chips de Filtro y Pestañas)
             let headerReportes = document.getElementById('header-reportes-clon');
             if (!headerReportes && viewContenedor && listaHtml) {
                 headerReportes = document.createElement('div');
@@ -180,7 +108,7 @@ export function configurarPanelAdmin() {
                     </div>
                     
                     <div id="contenedor-historial">
-                        <button id="btn-exportar-s13" style="width: 100%; background-color: var(--primary-color); color: white; border-radius: 12px; padding: 14px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <button id="btn-oficial-s13" style="width: 100%; background-color: #388E3C; color: white; border-radius: 12px; padding: 14px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                             📄 Descargar S-13 (PDF)
                         </button>
                         <div class="visitas-filtros" style="margin-bottom: 15px;">
@@ -200,25 +128,36 @@ export function configurarPanelAdmin() {
                         </div>
                     </div>
                 `;
-                viewContenedor.insertBefore(headerReportes, listaHtml);
+                
+                // Usamos insertBefore en el padre de listaHtml para que nunca falle
+                listaHtml.parentNode.insertBefore(headerReportes, listaHtml);
 
-                // Lógica de Pestañas
-                document.getElementById('tab-historial').onclick = (e) => {
-                    e.target.style.color = 'var(--primary-color)'; e.target.style.borderBottomColor = 'var(--primary-color)';
-                    document.getElementById('tab-atrasados').style.color = 'gray'; document.getElementById('tab-atrasados').style.borderBottomColor = 'transparent';
-                    document.getElementById('contenedor-historial').style.display = 'block';
-                    window.pestanaReportesActiva = 'historial';
-                    renderizarReportesFiltrados();
-                };
-                document.getElementById('tab-atrasados').onclick = (e) => {
-                    e.target.style.color = 'var(--primary-color)'; e.target.style.borderBottomColor = 'var(--primary-color)';
-                    document.getElementById('tab-historial').style.color = 'gray'; document.getElementById('tab-historial').style.borderBottomColor = 'transparent';
-                    document.getElementById('contenedor-historial').style.display = 'none';
-                    window.pestanaReportesActiva = 'atrasados';
-                    renderizarReportesFiltrados();
-                };
+                const tabHistorial = document.getElementById('tab-historial');
+                if (tabHistorial) {
+                    tabHistorial.onclick = (e) => {
+                        e.target.style.color = 'var(--primary-color)'; e.target.style.borderBottomColor = 'var(--primary-color)';
+                        const tabAtrasados = document.getElementById('tab-atrasados');
+                        if (tabAtrasados) { tabAtrasados.style.color = 'gray'; tabAtrasados.style.borderBottomColor = 'transparent'; }
+                        const contHistorial = document.getElementById('contenedor-historial');
+                        if (contHistorial) contHistorial.style.display = 'block';
+                        window.pestanaReportesActiva = 'historial';
+                        renderizarReportesFiltrados();
+                    };
+                }
 
-                // Lógica de Chips (Filtros de Tiempo)
+                const tabAtrasados = document.getElementById('tab-atrasados');
+                if (tabAtrasados) {
+                    tabAtrasados.onclick = (e) => {
+                        e.target.style.color = 'var(--primary-color)'; e.target.style.borderBottomColor = 'var(--primary-color)';
+                        const tabHist = document.getElementById('tab-historial');
+                        if (tabHist) { tabHist.style.color = 'gray'; tabHist.style.borderBottomColor = 'transparent'; }
+                        const contHistorial = document.getElementById('contenedor-historial');
+                        if (contHistorial) contHistorial.style.display = 'none';
+                        window.pestanaReportesActiva = 'atrasados';
+                        renderizarReportesFiltrados();
+                    };
+                }
+
                 window.filtroTiempoActivo = '1mes';
                 const chipsFiltro = headerReportes.querySelectorAll('.filtro-chip');
                 chipsFiltro.forEach(chip => {
@@ -226,22 +165,20 @@ export function configurarPanelAdmin() {
                         chipsFiltro.forEach(c => c.classList.remove('active'));
                         e.target.classList.add('active');
                         window.filtroTiempoActivo = e.target.getAttribute('data-filtro');
-                        
                         const panelFechas = document.getElementById('panel-fechas-rango');
-                        if (window.filtroTiempoActivo === 'rango') {
-                            panelFechas.style.display = 'flex';
-                        } else {
-                            panelFechas.style.display = 'none';
-                        }
+                        if (panelFechas) panelFechas.style.display = (window.filtroTiempoActivo === 'rango') ? 'flex' : 'none';
                         renderizarReportesFiltrados();
                     };
                 });
 
-                document.getElementById('filtro-desde').addEventListener('change', renderizarReportesFiltrados);
-                document.getElementById('filtro-hasta').addEventListener('change', renderizarReportesFiltrados);
+                // LOS SIGNOS DE INTERROGACIÓN MÁGICOS (?.) EVITAN QUE CRASHEE
+                document.getElementById('filtro-desde')?.addEventListener('change', renderizarReportesFiltrados);
+                document.getElementById('filtro-hasta')?.addEventListener('change', renderizarReportesFiltrados);
+                
+                const btnPdf = document.getElementById('btn-oficial-s13');
+                if (btnPdf) btnPdf.onclick = generarPDF_S13;
             }
             
-            // Traer Manzanas Existentes (Para el cálculo de atrasados)
             if(window.mapaGlobal) {
                 todosLosTerritorios.clear();
                 window.mapaGlobal.data.forEach(f => {
@@ -250,134 +187,242 @@ export function configurarPanelAdmin() {
                 });
             }
 
-            // Escuchar Reportes de Firebase
+            // AHORA ESTO SE VA A EJECUTAR SÍ O SÍ
             onSnapshot(collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad"), (snapshot) => {
                 todosLosReportes = [];
-                snapshot.forEach(doc => todosLosReportes.push({id: doc.id, ...doc.data()}));
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    data.manzanas = data.manzanas || []; 
+                    todosLosReportes.push({id: doc.id, ...data});
+                });
                 todosLosReportes.sort((a,b) => b.fecha - a.fecha);
                 renderizarReportesFiltrados();
             });
         };
     }
+    
+    function generarPDF_S13() {
+        try {
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                alert("Las librerías de PDF aún no han cargado. Revisa tu conexión a internet.");
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('portrait', 'mm', 'a4'); 
+            
+            let reportesFiltrados = todosLosReportes;
+            const hoy = Date.now();
+            if (window.filtroTiempoActivo === '1mes') {
+                reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hoy - (30 * 24 * 60 * 60 * 1000));
+            } else if (window.filtroTiempoActivo === '6meses') {
+                reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hoy - (180 * 24 * 60 * 60 * 1000));
+            } else if (window.filtroTiempoActivo === 'rango') {
+                const fDesde = document.getElementById('filtro-desde')?.value;
+                const fHasta = document.getElementById('filtro-hasta')?.value;
+                if (fDesde) reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= new Date(fDesde + "T00:00:00").getTime());
+                if (fHasta) reportesFiltrados = reportesFiltrados.filter(r => r.fecha <= new Date(fHasta + "T23:59:59").getTime());
+            }
 
-    // MOTOR GEMELO DE RENDERIZADO (ANDROID)
-    function renderizarReportesFiltrados() {
-        const listaHtml = document.getElementById('lista-reportes'); 
-        if (!listaHtml) return;
-        listaHtml.innerHTML = '';
-        
-        if (window.pestanaReportesActiva === 'atrasados') {
-            // LÓGICA: MÁS ATRASADOS
-            let ultimaVez = {};
-            todosLosReportes.forEach(reporte => {
-                reporte.manzanas.forEach(m => {
-                    if (!ultimaVez[m]) ultimaVez[m] = reporte.fecha;
+            let historialPorTerritorio = {};
+            let baseTerritorios = Array.from(todosLosTerritorios).map(t => t.split('-')[0].replace('T', '').trim());
+            baseTerritorios = [...new Set(baseTerritorios)].sort((a,b) => (parseInt(a)||999) - (parseInt(b)||999));
+            if (baseTerritorios.length === 0) baseTerritorios = Array.from({length: 20}, (_, i) => (i + 1).toString());
+            baseTerritorios.forEach(t => historialPorTerritorio[t] = []);
+
+            let reportesAsc = [...reportesFiltrados].sort((a,b) => a.fecha - b.fecha);
+            reportesAsc.forEach(rep => {
+                let basesDelReporte = [...new Set((rep.manzanas || []).map(m => m.split('-')[0].replace('T', '').trim()))];
+                basesDelReporte.forEach(b => { 
+                    if (historialPorTerritorio[b] !== undefined) historialPorTerritorio[b].push(rep); 
                 });
             });
 
-            let ranking = Array.from(todosLosTerritorios).map(m => ({
-                manzana: m,
-                fechaUltima: ultimaVez[m] || 0
-            })).sort((a, b) => a.fechaUltima - b.fechaUltima);
+            let bodyTabla = [];
+            baseTerritorios.forEach(numTerr => {
+                let reportesDelTerr = historialPorTerritorio[numTerr] || [];
+                if (reportesDelTerr.length > 4) reportesDelTerr = reportesDelTerr.slice(reportesDelTerr.length - 4); 
+                
+                let filaNombres = [
+                    { content: numTerr, rowSpan: 2, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fontSize: 11 } },
+                    { content: '', rowSpan: 2 } 
+                ];
+                let filaFechas = [];
 
-            ranking.forEach(item => {
-                const nunca = item.fechaUltima === 0;
-                const dias = nunca ? 0 : Math.floor((Date.now() - item.fechaUltima) / (1000 * 60 * 60 * 24));
-                const txt = nunca ? "Nunca reportado" : `Hace ${dias} días`;
-                const cBg = nunca ? "var(--error-container, #FFEBEE)" : "var(--surface-color)";
-                const cTx = nunca ? "var(--error-color, #C62828)" : "gray";
+                for (let i = 0; i < 4; i++) {
+                    if (i < reportesDelTerr.length) {
+                        let rep = reportesDelTerr[i];
+                        let d = new Date(rep.fecha);
+                        let fechaCompStr = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear().toString().slice(-2)}`;
+                        
+                        filaNombres.push({ content: rep.reportadoPor || "Desc.", colSpan: 2, styles: { halign: 'center', fontStyle: 'bold', fontSize: 8, overflow: 'hidden' } });
+                        filaFechas.push(''); 
+                        filaFechas.push({ content: fechaCompStr, styles: { halign: 'center', fontSize: 8 } });
+                    } else {
+                        filaNombres.push({ content: '', colSpan: 2 });
+                        filaFechas.push('');
+                        filaFechas.push('');
+                    }
+                }
+                bodyTabla.push(filaNombres);
+                bodyTabla.push(filaFechas);
+            });
+
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("REGISTRO DE ASIGNACIÓN DE TERRITORIO", 105, 15, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            const anio = new Date().getFullYear();
+            doc.text(`Año de servicio: ${anio}`, 14, 25);
+
+            doc.autoTable({
+                startY: 30,
+                theme: 'grid',
+                styles: { lineColor: [0, 0, 0], lineWidth: 0.2, textColor: [0, 0, 0], font: 'helvetica' },
+                headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 8, cellPadding: 1 },
+                head: [
+                    [
+                        { content: 'Núm.\nde\nterr.', rowSpan: 2 },
+                        { content: 'Última fecha\nen que se\ncompletó*', rowSpan: 2 },
+                        { content: 'Asignado a', colSpan: 2 }, { content: 'Asignado a', colSpan: 2 },
+                        { content: 'Asignado a', colSpan: 2 }, { content: 'Asignado a', colSpan: 2 }
+                    ],
+                    [
+                        'Fecha en que\nse asignó', 'Fecha en que\nse completó',
+                        'Fecha en que\nse asignó', 'Fecha en que\nse completó',
+                        'Fecha en que\nse asignó', 'Fecha en que\nse completó',
+                        'Fecha en que\nse asignó', 'Fecha en que\nse completó'
+                    ]
+                ],
+                body: bodyTabla
+            });
+
+            const finalY = doc.lastAutoTable.finalY || 280;
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "italic");
+            doc.text("*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.", 14, finalY + 10);
+            doc.setFont("helvetica", "bold");
+            doc.text("S-13-S 1/22", 180, finalY + 10);
+
+            const hoyStr = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
+            doc.save(`S-13_Congregacion_${window.miUsuario.congregacionId}_${hoyStr}.pdf`);
+        } catch (error) {
+            console.error(error);
+            alert("Hubo un error al crear el PDF: " + error.message);
+        }
+    }
+
+    function renderizarReportesFiltrados() {
+        try {
+            const listaHtml = document.getElementById('lista-reportes'); 
+            if (!listaHtml) return;
+            listaHtml.innerHTML = '';
+            
+            if (window.pestanaReportesActiva === 'atrasados') {
+                let ultimaVez = {};
+                todosLosReportes.forEach(reporte => {
+                    (reporte.manzanas || []).forEach(m => {
+                        if (!ultimaVez[m]) ultimaVez[m] = reporte.fecha;
+                    });
+                });
+
+                let ranking = Array.from(todosLosTerritorios).map(m => ({
+                    manzana: m,
+                    fechaUltima: ultimaVez[m] || 0
+                })).sort((a, b) => a.fechaUltima - b.fechaUltima);
+
+                ranking.forEach(item => {
+                    const nunca = item.fechaUltima === 0;
+                    const dias = nunca ? 0 : Math.floor((Date.now() - item.fechaUltima) / (1000 * 60 * 60 * 24));
+                    const txt = nunca ? "Nunca reportado" : `Hace ${dias} días`;
+                    const cBg = nunca ? "var(--error-container, #FFEBEE)" : "var(--surface-color)";
+                    const cTx = nunca ? "var(--error-color, #C62828)" : "gray";
+
+                    const card = document.createElement('div'); 
+                    card.className = 'admin-reporte-card';
+                    card.style.backgroundColor = cBg;
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:bold; color:var(--text-color); font-size:16px;">Manzana ${item.manzana}</span>
+                            <span style="font-weight:bold; color:${cTx}; font-size:14px;">${txt}</span>
+                        </div>
+                    `;
+                    listaHtml.appendChild(card);
+                });
+                return;
+            }
+
+            let reportesFiltrados = todosLosReportes;
+            const hoy = Date.now();
+
+            if (window.filtroTiempoActivo === '1mes') {
+                reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hoy - (30 * 24 * 60 * 60 * 1000));
+            } else if (window.filtroTiempoActivo === '6meses') {
+                reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hoy - (180 * 24 * 60 * 60 * 1000));
+            } else if (window.filtroTiempoActivo === 'rango') {
+                const fDesde = document.getElementById('filtro-desde')?.value;
+                const fHasta = document.getElementById('filtro-hasta')?.value;
+                if (fDesde) reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= new Date(fDesde + "T00:00:00").getTime());
+                if (fHasta) reportesFiltrados = reportesFiltrados.filter(r => r.fecha <= new Date(fHasta + "T23:59:59").getTime());
+            }
+            
+            if(reportesFiltrados.length === 0) { 
+                listaHtml.innerHTML = '<p style="color:gray;text-align:center;margin-top:40px;">No hay actividad en este período.</p>'; 
+                return; 
+            }
+
+            reportesFiltrados.forEach(rep => {
+                const d = new Date(rep.fecha);
+                const fStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} - ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+                const colorBadge = rep.cobertura === 'Completo' ? '#388E3C' : '#E65100';
+                
+                const agrupados = {};
+                (rep.manzanas || []).forEach(m => {
+                    const base = m.split('-')[0].trim();
+                    if (!agrupados[base]) agrupados[base] = [];
+                    agrupados[base].push(m);
+                });
+                const textoTerritorios = Object.keys(agrupados).map(base => {
+                    if (rep.cobertura === 'Completo') return base;
+                    const numeros = agrupados[base].map(x => x.split('-')[1]?.trim() || "Completa").join(", ");
+                    return `${base} (Mz: ${numeros})`;
+                }).join(" | ");
 
                 const card = document.createElement('div'); 
                 card.className = 'admin-reporte-card';
-                card.style.backgroundColor = cBg;
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:bold; color:var(--text-color); font-size:16px;">Manzana ${item.manzana}</span>
-                        <span style="font-weight:bold; color:${cTx}; font-size:14px;">${txt}</span>
+                        <span style="color:gray; font-size:13px; font-weight:bold;">${fStr}</span>
+                        <span style="background:${colorBadge}20; color:${colorBadge}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:900;">${rep.cobertura.toUpperCase()}</span>
                     </div>
+                    <p style="margin: 10px 0 5px 0; font-weight:bold; color:var(--text-color); font-size:15px;">Territorios: <span style="color:var(--primary-color);">${textoTerritorios}</span></p>
+                    <p style="margin: 0; font-size:14px; color:gray;">👤 Por: ${rep.reportadoPor || 'Desconocido'}</p>
+                    ${rep.notes || rep.notas ? `<div style="margin-top:10px; background:rgba(128,128,128,0.1); padding:10px; border-radius:8px; font-size:13px; color:var(--text-color, #444);">📝 ${rep.notes || rep.notas}</div>` : ''}
                 `;
                 listaHtml.appendChild(card);
             });
-            return;
+        } catch (e) {
+            console.error("Error al renderizar reportes:", e);
         }
-
-        // LÓGICA: HISTORIAL (CON FILTROS DE TIEMPO)
-        let reportesFiltrados = todosLosReportes;
-        const hoy = Date.now();
-
-        if (window.filtroTiempoActivo === '1mes') {
-            const hace1Mes = hoy - (30 * 24 * 60 * 60 * 1000);
-            reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hace1Mes);
-        } else if (window.filtroTiempoActivo === '6meses') {
-            const hace6Meses = hoy - (180 * 24 * 60 * 60 * 1000);
-            reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= hace6Meses);
-        } else if (window.filtroTiempoActivo === 'rango') {
-            const fechaDesdeStr = document.getElementById('filtro-desde')?.value;
-            const fechaHastaStr = document.getElementById('filtro-hasta')?.value;
-            if (fechaDesdeStr) {
-                const msDesde = new Date(fechaDesdeStr + "T00:00:00").getTime();
-                reportesFiltrados = reportesFiltrados.filter(r => r.fecha >= msDesde);
-            }
-            if (fechaHastaStr) {
-                const msHasta = new Date(fechaHastaStr + "T23:59:59").getTime();
-                reportesFiltrados = reportesFiltrados.filter(r => r.fecha <= msHasta);
-            }
-        }
-        
-        if(reportesFiltrados.length === 0) { 
-            listaHtml.innerHTML = '<p style="color:gray;text-align:center;margin-top:40px;">No hay actividad en este período.</p>'; 
-            return; 
-        }
-
-        reportesFiltrados.forEach(rep => {
-            const d = new Date(rep.fecha);
-            const fStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} - ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
-            const colorBadge = rep.cobertura === 'Completo' ? '#388E3C' : '#E65100';
-            
-            // Formateador exacto al de Android
-            const agrupados = {};
-            rep.manzanas.forEach(m => {
-                const base = m.split('-')[0].trim();
-                if (!agrupados[base]) agrupados[base] = [];
-                agrupados[base].push(m);
-            });
-            const textoTerritorios = Object.keys(agrupados).map(base => {
-                if (rep.cobertura === 'Completo') return base;
-                const numeros = agrupados[base].map(x => x.split('-')[1]?.trim() || "Completa").join(", ");
-                return `${base} (Mz: ${numeros})`;
-            }).join(" | ");
-
-            const card = document.createElement('div'); 
-            card.className = 'admin-reporte-card';
-            card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="color:gray; font-size:13px; font-weight:bold;">${fStr}</span>
-                    <span style="background:${colorBadge}20; color:${colorBadge}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:900;">${rep.cobertura.toUpperCase()}</span>
-                </div>
-                <p style="margin: 10px 0 5px 0; font-weight:bold; color:var(--text-color); font-size:15px;">Territorios: <span style="color:var(--primary-color);">${textoTerritorios}</span></p>
-                <p style="margin: 0; font-size:14px; color:gray;">👤 Por: ${rep.reportadoPor}</p>
-                ${rep.notes || rep.notas ? `<div style="margin-top:10px; background:rgba(128,128,128,0.1); padding:10px; border-radius:8px; font-size:13px; color:var(--text-color, #444);">📝 ${rep.notes || rep.notas}</div>` : ''}
-            `;
-            listaHtml.appendChild(card);
-        });
     }
-      
+
+    // -----------------------------------------------------------
     // 2. GESTIÓN DE TERRITORIOS (INVENTARIO)
+    // -----------------------------------------------------------
     let seleccionadosInventario = new Set();
     let mapasEstadoGlobal = {};
 
     function actualizarBarraInventario() {
         const contadorInv = document.getElementById('contador-inventario');
         if (contadorInv) contadorInv.innerText = seleccionadosInventario.size;
-        const btnAsignar = document.getElementById('btn-assignar-mapas') || document.getElementById('btn-asignar-mapas');
+        const btnAsignar = document.getElementById('btn-asignar-mapas') || document.getElementById('btn-assignar-mapas');
         const btnRecibir = document.getElementById('btn-recibir-mapas');
         
         if (!btnAsignar || !btnRecibir) return;
 
         if (seleccionadosInventario.size === 0) { 
-            btnAsignar.disabled = true; 
-            btnRecibir.style.display = 'none'; 
-            btnAsignar.style.display = 'block'; 
+            btnAsignar.disabled = true; btnRecibir.style.display = 'none'; btnAsignar.style.display = 'block'; 
             return; 
         }
         
@@ -386,33 +431,13 @@ export function configurarPanelAdmin() {
             if (mapasEstadoGlobal[id] && !mapasEstadoGlobal[id].estaDisponible) todosLibres = false; 
         });
         
-        if (todosLibres) { 
-            btnAsignar.style.display = 'block'; 
-            btnAsignar.disabled = false; 
-            btnRecibir.style.display = 'none'; 
-        } else { 
-            btnAsignar.style.display = 'none'; 
-            btnRecibir.style.display = 'block'; 
-        }
+        if (todosLibres) { btnAsignar.style.display = 'block'; btnAsignar.disabled = false; btnRecibir.style.display = 'none'; } 
+        else { btnAsignar.style.display = 'none'; btnRecibir.style.display = 'block'; }
     }
 
     const btnAdminInventario = document.getElementById('btn-admin-inventario');
     if (btnAdminInventario) {
         btnAdminInventario.onclick = () => {
-            // INYECTAR EL BOTÓN DEL S-13 DINÁMICAMENTE
-            const listaHtml = document.getElementById('lista-inventario');
-            let btnExportar = document.getElementById('btn-exportar-s13');
-            
-            if (!btnExportar && listaHtml) {
-                btnExportar = document.createElement('button');
-                btnExportar.id = 'btn-exportar-s13';
-                btnExportar.innerText = '📄 Descargar Reporte S-13 (PDF)';
-                btnExportar.style.cssText = 'width: 100%; margin-bottom: 15px; background-color: #388E3C; color: white; border-radius: 12px; padding: 14px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
-                btnExportar.onclick = generarPDF_S13;
-                
-                // Lo insertamos justo antes de la lista
-                listaHtml.parentNode.insertBefore(btnExportar, listaHtml);
-            }
             history.pushState({ page: 'admin_sub' }, '', '');
             if (adminDashboard) adminDashboard.style.display = 'none'; 
             if (viewInventario) viewInventario.style.display = 'block';
@@ -424,8 +449,7 @@ export function configurarPanelAdmin() {
             let manzanasUnicas = new Set();
             if(window.mapaGlobal) {
                 window.mapaGlobal.data.forEach(f => {
-                    const t = f.getProperty('territorio'); 
-                    const m = f.getProperty('numero');
+                    const t = f.getProperty('territorio'); const m = f.getProperty('numero');
                     if(t && m && m.toLowerCase() !== 'plaza') manzanasUnicas.add(`T${t} - ${m}`);
                 });
             }
@@ -456,15 +480,13 @@ export function configurarPanelAdmin() {
                         }
                     }
 
-                    const div = document.createElement('div'); 
-                    div.className = 'inventario-item';
+                    const div = document.createElement('div'); div.className = 'inventario-item';
                     div.innerHTML = `<input type="checkbox" value="${manzanaId}" ${seleccionadosInventario.has(manzanaId) ? 'checked' : ''}><div class="inventario-info"><h4>Manzana ${manzanaId} ${badgeHtml}</h4>${infoHtml}</div>`;
                     
                     const checkbox = div.querySelector('input');
                     div.onclick = (e) => { 
                         if(e.target !== checkbox) checkbox.checked = !checkbox.checked;
-                        if (checkbox.checked) seleccionadosInventario.add(manzanaId); 
-                        else seleccionadosInventario.delete(manzanaId);
+                        if (checkbox.checked) seleccionadosInventario.add(manzanaId); else seleccionadosInventario.delete(manzanaId);
                         actualizarBarraInventario();
                     };
                     listaHtml.appendChild(div);
@@ -479,12 +501,11 @@ export function configurarPanelAdmin() {
             seleccionadosInventario.forEach(async (id) => { 
                 await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas", id), { estaDisponible: true }); 
             });
-            seleccionadosInventario.clear(); 
-            actualizarBarraInventario();
+            seleccionadosInventario.clear(); actualizarBarraInventario();
         };
     }
 
-    const btnAsignarMapas = document.getElementById('btn-asignar-mapas');
+    const btnAsignarMapas = document.getElementById('btn-asignar-mapas') || document.getElementById('btn-assignar-mapas');
     if (btnAsignarMapas) {
         btnAsignarMapas.onclick = () => {
             history.pushState({ page: 'modal_asignar' }, '', '');
@@ -509,21 +530,17 @@ export function configurarPanelAdmin() {
 
             seleccionadosInventario.forEach(async (id) => {
                 await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas", id), { 
-                    asignadoA: nombre, 
-                    fecha: Date.now(), 
-                    estaDisponible: false, 
-                    duracionMeses: meses 
+                    asignadoA: nombre, fecha: Date.now(), estaDisponible: false, duracionMeses: meses 
                 });
             });
-
             if (nombreInput) nombreInput.value = '';
-            seleccionadosInventario.clear();
-            actualizarBarraInventario();
-            history.back(); 
+            seleccionadosInventario.clear(); actualizarBarraInventario(); history.back(); 
         };
     }
 
-    // 3. HERMANOS Y PERMISOS (GESTIÓN DE ACCESOS SECURE MULTI-CONGREGACIÓN)
+    // -----------------------------------------------------------
+    // 3. HERMANOS Y PERMISOS (GESTIÓN DE ROLES)
+    // -----------------------------------------------------------
     const btnAdminRoles = document.getElementById('btn-admin-roles');
     if (btnAdminRoles) {
         btnAdminRoles.onclick = () => {
@@ -536,29 +553,21 @@ export function configurarPanelAdmin() {
             listaHtml.innerHTML = '<p style="color:gray; text-align:center; margin-top:20px;">Cargando lista de hermanos...</p>';
 
             const congRef = doc(db, "congregaciones", window.miUsuario.congregacionId);
-            
             onSnapshot(congRef, async (docSnap) => {
                 if (!docSnap.exists()) return;
-                
                 const rolesMap = docSnap.data().roles || {};
                 const emailsCongregacion = Object.keys(rolesMap);
                 
                 if (emailsCongregacion.length === 0) {
-                    listaHtml.innerHTML = '<p style="color:gray; text-align:center; margin-top:40px;">No hay usuarios registrados en esta congregación.</p>';
-                    return;
+                    listaHtml.innerHTML = '<p style="color:gray; text-align:center; margin-top:40px;">No hay usuarios registrados.</p>'; return;
                 }
 
-                // Buscamos SOLO los datos de los usuarios que pertenecen estrictamente a esta congregación
                 let nombresUsuarios = {};
                 await Promise.all(emailsCongregacion.map(async (email) => {
                     try {
                         const uDoc = await getDoc(doc(db, "usuarios", email));
-                        if (uDoc.exists()) {
-                            nombresUsuarios[email] = `${uDoc.data().nombre || ''} ${uDoc.data().apellido || ''}`.trim();
-                        }
-                    } catch (e) {
-                        console.warn(`No se pudo leer el perfil de ${email}`);
-                    }
+                        if (uDoc.exists()) nombresUsuarios[email] = `${uDoc.data().nombre || ''} ${uDoc.data().apellido || ''}`.trim();
+                    } catch (e) {}
                 }));
 
                 listaHtml.innerHTML = '';
@@ -570,30 +579,20 @@ export function configurarPanelAdmin() {
                     const nombreMostrar = nombresUsuarios[email] || email;
                     const esMiPropioUsuario = email === miEmail;
 
-                    const card = document.createElement('div');
-                    card.className = 'admin-reporte-card';
-                    card.style.display = 'flex';
-                    card.style.justifyContent = 'space-between';
-                    card.style.alignItems = 'center';
-                    card.style.gap = '10px';
+                    const card = document.createElement('div'); card.className = 'admin-reporte-card';
+                    card.style.display = 'flex'; card.style.justifyContent = 'space-between'; card.style.alignItems = 'center'; card.style.gap = '10px';
 
-                    const opcionesRoles = {
-                        "siervo": "Siervo de Territorios",
-                        "ayudante": "Ayudante de Territorios",
-                        "conductor": "Conductor de Grupo",
-                        "publicador": "Publicador"
-                    };
-
+                    const opcionesRoles = { "siervo": "Siervo", "ayudante": "Ayudante", "conductor": "Conductor", "publicador": "Publicador" };
                     let controlRolHtml = `<span style="color:var(--primary-color); font-weight:bold; font-size:14px;">${opcionesRoles[rolActual] || rolActual.toUpperCase()}</span>`;
                     
                     if (!esMiPropioUsuario && soySiervo) {
                         controlRolHtml = `
                             <select class="select-rol-dinamico" data-email="${email}" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-color); font-size: 13px; font-weight: bold;">
                                 <option value="publicador" ${rolActual === 'publicador' ? 'selected' : ''}>Publicador</option>
-                                <option value="conductor" ${rolActual === 'conductor' ? 'selected' : ''}>Conductor de Grupo</option>
-                                <option value="ayudante" ${rolActual === 'ayudante' ? 'selected' : ''}>Ayudante de Territorios</option>
-                                <option value="siervo" ${rolActual === 'siervo' ? 'selected' : ''}>Siervo de Territorios</option>
-                                <option value="quitar" style="color:#C62828;">❌ Quitar Acceso</option>
+                                <option value="conductor" ${rolActual === 'conductor' ? 'selected' : ''}>Conductor</option>
+                                <option value="ayudante" ${rolActual === 'ayudante' ? 'selected' : ''}>Ayudante</option>
+                                <option value="siervo" ${rolActual === 'siervo' ? 'selected' : ''}>Siervo</option>
+                                <option value="quitar" style="color:#C62828;">❌ Quitar</option>
                             </select>
                         `;
                     }
@@ -605,28 +604,20 @@ export function configurarPanelAdmin() {
                             </h4>
                             <p style="margin:0; font-size:13px; color:gray; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${email}</p>
                         </div>
-                        <div style="flex-shrink:0;">
-                            ${controlRolHtml}
-                        </div>
+                        <div style="flex-shrink:0;">${controlRolHtml}</div>
                     `;
 
                     if (!esMiPropioUsuario && soySiervo) {
                         const select = card.querySelector('.select-rol-dinamico');
                         if (select) {
                             select.onchange = async (e) => {
-                                const nuevoRol = e.target.value;
-                                const emailTarget = e.target.getAttribute('data-email');
-                                
+                                const nuevoRol = e.target.value; const emailTarget = e.target.getAttribute('data-email');
                                 if (nuevoRol === 'quitar') {
-                                    if (confirm(`¿Estás seguro de que quieres quitarle el acceso a ${nombreMostrar}?`)) {
-                                        delete rolesMap[emailTarget];
-                                        await setDoc(congRef, { roles: rolesMap }, { merge: true });
-                                    } else {
-                                        e.target.value = rolActual;
-                                    }
+                                    if (confirm(`¿Quitar el acceso a ${nombreMostrar}?`)) {
+                                        delete rolesMap[emailTarget]; await setDoc(congRef, { roles: rolesMap }, { merge: true });
+                                    } else e.target.value = rolActual;
                                 } else {
-                                    rolesMap[emailTarget] = nuevoRol;
-                                    await setDoc(congRef, { roles: rolesMap }, { merge: true });
+                                    rolesMap[emailTarget] = nuevoRol; await setDoc(congRef, { roles: rolesMap }, { merge: true });
                                 }
                             };
                         }
