@@ -8,6 +8,89 @@ import { refrescarEstilosMapa } from "./map-service.js";
 window.modoRegistroActivo = false;
 window.manzanasSeleccionadas = new Set();
 
+// ==========================================
+// GENERADOR DE PDF (FORMULARIO S-13)
+// ==========================================
+async function generarPDF_S13() {
+    // Inicializamos la librería de PDF
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Título y Encabezado
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Registro de Asignación de Territorios (S-13)", 14, 20);
+    
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Congregación: ${window.miUsuario.congregacionId}`, 14, 28);
+    const fechaHoy = new Date().toLocaleDateString('es-ES');
+    doc.text(`Fecha de exportación: ${fechaHoy}`, 14, 34);
+
+    // Traemos los datos frescos de la base de datos
+    const snapshot = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas"));
+    let datosTabla = [];
+
+    snapshot.forEach(d => {
+        const mapa = d.id; // Ej: T1 - A
+        const data = d.data();
+        
+        // Filtramos solo los que están actualmente asignados (No disponibles)
+        if (!data.estaDisponible && data.fecha) {
+            const fSalida = new Date(data.fecha);
+            const fVencimiento = new Date(data.fecha);
+            fVencimiento.setMonth(fVencimiento.getMonth() + (data.duracionMeses || 4));
+
+            const diasRestantes = Math.ceil((fVencimiento - new Date()) / (1000 * 60 * 60 * 24));
+            let estado = diasRestantes < 0 ? "VENCIDO" : "Al día";
+
+            datosTabla.push([
+                mapa,
+                data.asignadoA || "Desconocido",
+                fSalida.toLocaleDateString('es-ES'),
+                fVencimiento.toLocaleDateString('es-ES'),
+                estado
+            ]);
+        }
+    });
+
+    // Ordenamos la tabla alfabéticamente por Territorio (Ej: T1, T2, T3)
+    datosTabla.sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric: true}));
+
+    if (datosTabla.length === 0) {
+        alert("No hay territorios asignados para generar el reporte S-13.");
+        return;
+    }
+
+    // Dibujamos la tabla automática
+    doc.autoTable({
+        startY: 42,
+        head: [['Territorio / Manzana', 'Publicador Asignado', 'F. Salida', 'Vence', 'Estado']],
+        body: datosTabla,
+        theme: 'striped',
+        headStyles: { fillColor: [168, 117, 255] }, // Tu color violeta (--primary-color)
+        styles: { fontSize: 10, cellPadding: 4 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+            4: { fontStyle: 'bold', textColor: [0, 0, 0] } 
+        },
+        // Cambiar color del texto si está vencido
+        didParseCell: function(data) {
+            if (data.section === 'body' && data.column.index === 4) {
+                if (data.cell.raw === 'VENCIDO') {
+                    data.cell.styles.textColor = [198, 40, 40]; // Rojo
+                } else {
+                    data.cell.styles.textColor = [46, 125, 50]; // Verde
+                }
+            }
+        }
+    });
+
+    // Guardar y descargar el archivo
+    const nombreArchivo = `S-13_Congregacion_${window.miUsuario.congregacionId}_${fechaHoy.replace(/\//g, '-')}.pdf`;
+    doc.save(nombreArchivo);
+}
+
 export function configurarPanelAdmin() {
     const btnFabRegistro = document.getElementById('btn-fab-registro');
     const panelRegistro = document.getElementById('panel-registro');
@@ -151,6 +234,20 @@ export function configurarPanelAdmin() {
     const btnAdminInventario = document.getElementById('btn-admin-inventario');
     if (btnAdminInventario) {
         btnAdminInventario.onclick = () => {
+            // INYECTAR EL BOTÓN DEL S-13 DINÁMICAMENTE
+            const listaHtml = document.getElementById('lista-inventario');
+            let btnExportar = document.getElementById('btn-exportar-s13');
+            
+            if (!btnExportar && listaHtml) {
+                btnExportar = document.createElement('button');
+                btnExportar.id = 'btn-exportar-s13';
+                btnExportar.innerText = '📄 Descargar Reporte S-13 (PDF)';
+                btnExportar.style.cssText = 'width: 100%; margin-bottom: 15px; background-color: #388E3C; color: white; border-radius: 12px; padding: 14px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
+                btnExportar.onclick = generarPDF_S13;
+                
+                // Lo insertamos justo antes de la lista
+                listaHtml.parentNode.insertBefore(btnExportar, listaHtml);
+            }
             history.pushState({ page: 'admin_sub' }, '', '');
             if (adminDashboard) adminDashboard.style.display = 'none'; 
             if (viewInventario) viewInventario.style.display = 'block';
