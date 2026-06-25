@@ -121,7 +121,7 @@ export function configurarPanelAdmin() {
     function actualizarBarraInventario() {
         const contadorInv = document.getElementById('contador-inventario');
         if (contadorInv) contadorInv.innerText = seleccionadosInventario.size;
-        const btnAsignar = document.getElementById('btn-asignar-mapas');
+        const btnAsignar = document.getElementById('btn-assignar-mapas') || document.getElementById('btn-asignar-mapas');
         const btnRecibir = document.getElementById('btn-recibir-mapas');
         
         if (!btnAsignar || !btnRecibir) return;
