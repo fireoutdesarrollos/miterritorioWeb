@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: admin-service.js (VERSIÓN DEFINITIVA S-13)
+// ARCHIVO: admin-service.js (VERSIÓN DEFINITIVA Y ENSAMBLADA)
 // ==========================================
 import { collection, doc, setDoc, onSnapshot, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
@@ -67,6 +67,40 @@ export function configurarPanelAdmin() {
     if (btnRegParcial) btnRegParcial.onclick = () => guardarReporteActividad("Parcial");
 
     // ==========================================
+    // ALARMA DE SALA DE ESPERA (GLOBO ROJO)
+    // ==========================================
+    if (window.miUsuario && window.miUsuario.rol === 'siervo') {
+        onSnapshot(doc(db, "congregaciones", window.miUsuario.congregacionId), (docSnap) => {
+            if (docSnap.exists()) {
+                const rolesMap = docSnap.data().roles || {};
+                const cantidadPendientes = Object.values(rolesMap).filter(rol => rol === 'pendiente').length;
+                
+                const btnRoles = document.getElementById('btn-admin-roles');
+                if (btnRoles) {
+                    let badge = document.getElementById('badge-pendientes');
+                    if (cantidadPendientes > 0) {
+                        if (!badge) {
+                            badge = document.createElement('span');
+                            badge.id = 'badge-pendientes';
+                            badge.style.cssText = 'background-color: #E53935; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; margin-left: 10px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); animation: latido 1.5s infinite;';
+                            if (!document.getElementById('style-latido')) {
+                                const style = document.createElement('style');
+                                style.id = 'style-latido';
+                                style.innerHTML = `@keyframes latido { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }`;
+                                document.head.appendChild(style);
+                            }
+                            btnRoles.appendChild(badge);
+                        }
+                        badge.innerText = cantidadPendientes;
+                    } else if (badge) {
+                        badge.remove();
+                    }
+                }
+            }
+        });
+    }
+
+    // ==========================================
     // PESTAÑAS INTERNAS DE SERVICIO
     // ==========================================
     const adminDashboard = document.getElementById('admin-dashboard');
@@ -76,7 +110,7 @@ export function configurarPanelAdmin() {
 
     document.querySelectorAll('.btn-volver-admin').forEach(btn => btn.onclick = () => history.back());
 
-   // -----------------------------------------------------------
+    // -----------------------------------------------------------
     // 1. REPORTES, ESTADÍSTICAS Y PDF S-13
     // -----------------------------------------------------------
     let todosLosReportes = []; 
@@ -171,7 +205,6 @@ export function configurarPanelAdmin() {
                     };
                 });
 
-                // LOS SIGNOS DE INTERROGACIÓN MÁGICOS (?.) EVITAN QUE CRASHEE
                 document.getElementById('filtro-desde')?.addEventListener('change', renderizarReportesFiltrados);
                 document.getElementById('filtro-hasta')?.addEventListener('change', renderizarReportesFiltrados);
                 
@@ -187,7 +220,6 @@ export function configurarPanelAdmin() {
                 });
             }
 
-            // AHORA ESTO SE VA A EJECUTAR SÍ O SÍ
             onSnapshot(collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad"), (snapshot) => {
                 todosLosReportes = [];
                 snapshot.forEach(doc => {
@@ -539,7 +571,7 @@ export function configurarPanelAdmin() {
     }
 
     // -----------------------------------------------------------
-    // 3. HERMANOS Y PERMISOS (GESTIÓN DE ROLES)
+    // 3. HERMANOS Y PERMISOS (GESTIÓN DE ROLES BLINDADA)
     // -----------------------------------------------------------
     const btnAdminRoles = document.getElementById('btn-admin-roles');
     if (btnAdminRoles) {
@@ -573,26 +605,48 @@ export function configurarPanelAdmin() {
                 listaHtml.innerHTML = '';
                 const soySiervo = window.miUsuario.rol === 'siervo';
                 const miEmail = window.miUsuario.email;
-                const listaEntradas = Object.entries(rolesMap).sort((a, b) => a[1].localeCompare(b[1]));
+                
+                // Ordenamos: Primero los pendientes, luego alfabéticamente (Blindado contra nulos)
+                const listaEntradas = Object.entries(rolesMap).sort((a, b) => {
+                    const rolA = String(a[1] || '');
+                    const rolB = String(b[1] || '');
+
+                    if (rolA === 'pendiente' && rolB !== 'pendiente') return -1;
+                    if (rolB === 'pendiente' && rolA !== 'pendiente') return 1;
+                    return rolA.localeCompare(rolB);
+                });
 
                 listaEntradas.forEach(([email, rolActual]) => {
                     const nombreMostrar = nombresUsuarios[email] || email;
                     const esMiPropioUsuario = email === miEmail;
+                    const esPendiente = rolActual === 'pendiente';
 
-                    const card = document.createElement('div'); card.className = 'admin-reporte-card';
-                    card.style.display = 'flex'; card.style.justifyContent = 'space-between'; card.style.alignItems = 'center'; card.style.gap = '10px';
+                    const card = document.createElement('div'); 
+                    card.className = 'admin-reporte-card';
+                    card.style.display = 'flex'; 
+                    card.style.justifyContent = 'space-between'; 
+                    card.style.alignItems = 'center'; 
+                    card.style.gap = '10px';
+                    
+                    // Resaltado visual para los pendientes
+                    if (esPendiente) {
+                        card.style.borderLeft = '4px solid #E65100';
+                        card.style.backgroundColor = '#FFF3E0';
+                    }
 
-                    const opcionesRoles = { "siervo": "Siervo", "ayudante": "Ayudante", "conductor": "Conductor", "publicador": "Publicador" };
-                    let controlRolHtml = `<span style="color:var(--primary-color); font-weight:bold; font-size:14px;">${opcionesRoles[rolActual] || rolActual.toUpperCase()}</span>`;
+                    const opcionesRoles = { "siervo": "Siervo", "ayudante": "Ayudante", "conductor": "Conductor", "publicador": "Publicador", "pendiente": "⏳ EN ESPERA" };
+                    let colorRol = esPendiente ? '#E65100' : 'var(--primary-color)';
+                    let controlRolHtml = `<span style="color:${colorRol}; font-weight:bold; font-size:14px;">${opcionesRoles[rolActual] || String(rolActual).toUpperCase()}</span>`;
                     
                     if (!esMiPropioUsuario && soySiervo) {
                         controlRolHtml = `
                             <select class="select-rol-dinamico" data-email="${email}" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-color); font-size: 13px; font-weight: bold;">
+                                ${esPendiente ? `<option value="pendiente" selected disabled>⏳ Aprobar como...</option>` : ''}
                                 <option value="publicador" ${rolActual === 'publicador' ? 'selected' : ''}>Publicador</option>
                                 <option value="conductor" ${rolActual === 'conductor' ? 'selected' : ''}>Conductor</option>
                                 <option value="ayudante" ${rolActual === 'ayudante' ? 'selected' : ''}>Ayudante</option>
                                 <option value="siervo" ${rolActual === 'siervo' ? 'selected' : ''}>Siervo</option>
-                                <option value="quitar" style="color:#C62828;">❌ Quitar</option>
+                                <option value="quitar" style="color:#C62828;">❌ ${esPendiente ? 'Rechazar' : 'Quitar'}</option>
                             </select>
                         `;
                     }
@@ -611,13 +665,18 @@ export function configurarPanelAdmin() {
                         const select = card.querySelector('.select-rol-dinamico');
                         if (select) {
                             select.onchange = async (e) => {
-                                const nuevoRol = e.target.value; const emailTarget = e.target.getAttribute('data-email');
+                                const nuevoRol = e.target.value; 
+                                const emailTarget = e.target.getAttribute('data-email');
                                 if (nuevoRol === 'quitar') {
-                                    if (confirm(`¿Quitar el acceso a ${nombreMostrar}?`)) {
-                                        delete rolesMap[emailTarget]; await setDoc(congRef, { roles: rolesMap }, { merge: true });
-                                    } else e.target.value = rolActual;
+                                    if (confirm(`¿Seguro que quieres ${esPendiente ? 'rechazar' : 'quitar el acceso'} a ${nombreMostrar}?`)) {
+                                        delete rolesMap[emailTarget]; 
+                                        await setDoc(congRef, { roles: rolesMap }, { merge: true });
+                                    } else {
+                                        e.target.value = rolActual;
+                                    }
                                 } else {
-                                    rolesMap[emailTarget] = nuevoRol; await setDoc(congRef, { roles: rolesMap }, { merge: true });
+                                    rolesMap[emailTarget] = nuevoRol; 
+                                    await setDoc(congRef, { roles: rolesMap }, { merge: true });
                                 }
                             };
                         }

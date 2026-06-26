@@ -4,33 +4,100 @@
 * {
     box-sizing: border-box;
 }
+
 /* =========================================
    VARIABLES Y TEMAS (Claro / Oscuro)
    ========================================= */
-:root {
+/* TEMA CLARO (Por defecto) */
+:root, [data-theme="light"] {
     --primary-color: #a875ff; 
     --primary-dark: #2b1a3f;  
     --accent-color: #5c3b6e;  
     --bg-color: #F3F4F6;
-    --surface-color: #FFFFFF; /* NUEVO: Fondo para tarjetas en modo claro */
-    --border-color: rgba(0, 0, 0, 0.1); /* NUEVO: Borde en modo claro */
+    --surface-color: #FFFFFF; 
+    --border-color: rgba(0, 0, 0, 0.1); 
     --text-color: #1F2937;
-    --text-muted: gray; /* NUEVO: Texto secundario en modo claro */
+    --text-muted: gray; 
     --tab-text-inactive: #a092b1;
     --tab-text-active: #ffffff;
     --border-radius: 12px;
+    --input-border: gray;
+    --chip-bg: #E0E0E0;
+    --chip-text: #424242;
+    --btn-secondary-bg: #E0E0E0;
+    --btn-secondary-text: black;
+    --chat-bg: #DCF8C6;
+    --chat-text: #303030;
+    --chat-meta: #666666;
+    --modal-overlay: rgba(0,0,0,0.6);
+    --badge-libre-bg: #E8F5E9;
+    --badge-libre-text: #2E7D32;
+    --badge-asignado-bg: #FFF3E0;
+    --badge-asignado-text: #E65100;
+    --badge-vencido-bg: #FFEBEE;
+    --badge-vencido-text: #C62828;
+    --error-bg: #FFEBEE;
+    --error-text: #C62828;
 }
 
+/* TEMA OSCURO (Forzado por data-theme) */
+[data-theme="dark"] {
+    --primary-color: #8a57e3; 
+    --primary-dark: #170d24;
+    --accent-color: #7b5291;
+    --bg-color: #121212;
+    --surface-color: #2B2A33; /* El color oscuro que te gustaba */
+    --border-color: #3F3E47; /* Borde sutil oscuro */
+    --text-color: #E5E7EB;
+    --text-muted: #A0A0A0; 
+    --input-border: #555;
+    --chip-bg: #2C2C2C;
+    --chip-text: #E0E0E0;
+    --btn-secondary-bg: #333;
+    --btn-secondary-text: white;
+    --chat-bg: #054735;
+    --chat-text: #E2E8F0;
+    --chat-meta: #94A3B8;
+    --modal-overlay: rgba(0,0,0,0.8); /* Fondo más oscuro para modales en este tema */
+    --badge-libre-bg: rgba(46, 125, 50, 0.2);
+    --badge-libre-text: #4CAF50;
+    --badge-asignado-bg: rgba(230, 81, 0, 0.2);
+    --badge-asignado-text: #FF9800;
+    --badge-vencido-bg: rgba(198, 40, 40, 0.2);
+    --badge-vencido-text: #EF5350;
+    --error-bg: rgba(198, 40, 40, 0.2);
+    --error-text: #EF5350;
+}
+
+/* TEMA AUTOMÁTICO (Del sistema) */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
+        /* Copiamos exactamente las mismas variables del tema oscuro */
         --primary-color: #8a57e3; 
         --primary-dark: #170d24;
         --accent-color: #7b5291;
         --bg-color: #121212;
-        --surface-color: #1A1A1C; /* NUEVO: Fondo gris oscuro para tarjetas */
-        --border-color: rgba(255, 255, 255, 0.08); /* NUEVO: Borde sutil en modo oscuro */
+        --surface-color: #2B2A33; 
+        --border-color: #3F3E47; 
         --text-color: #E5E7EB;
-        --text-muted: #A0A0A0; /* NUEVO: Texto secundario en modo oscuro */
+        --text-muted: #A0A0A0; 
+        --input-border: #555;
+        --chip-bg: #2C2C2C;
+        --chip-text: #E0E0E0;
+        --btn-secondary-bg: #333;
+        --btn-secondary-text: white;
+        --chat-bg: #054735;
+        --chat-text: #E2E8F0;
+        --chat-meta: #94A3B8;
+        --modal-overlay: rgba(0,0,0,0.8);
+        --badge-libre-bg: rgba(46, 125, 50, 0.2);
+        --badge-libre-text: #4CAF50;
+        --badge-asignado-bg: rgba(230, 81, 0, 0.2);
+        --badge-asignado-text: #FF9800;
+        --badge-vencido-bg: rgba(198, 40, 40, 0.2);
+        --badge-vencido-text: #EF5350;
+        --error-bg: rgba(198, 40, 40, 0.2);
+        --error-text: #EF5350;
     }
 }
 
@@ -119,7 +186,7 @@ button:active { opacity: 0.8; }
 }
 .visitas-filtros::-webkit-scrollbar { display: none; }
 .filtro-chip {
-    background-color: #E0E0E0; color: #424242; border: 1px solid transparent;
+    background-color: var(--chip-bg); color: var(--chip-text); border: 1px solid transparent;
     padding: 8px 18px; border-radius: 24px; font-size: 14px; font-weight: 600;
     white-space: nowrap; cursor: pointer; transition: all 0.2s ease; width: auto;
 }
@@ -143,17 +210,17 @@ button:active { opacity: 0.8; }
 .form-row { display: flex; gap: 15px; margin-bottom: 15px; }
 .input-group { margin-bottom: 15px; display: flex; flex-direction: column; flex: 1; }
 .input-group label { font-size: 13px; color: var(--primary-color); font-weight: bold; margin-bottom: 5px; }
-.input-group input, .input-group select, .input-group textarea { background-color: transparent; border: 1px solid gray; border-radius: 8px; padding: 12px; color: var(--text-color); font-family: inherit; font-size: 15px; }
+.input-group input, .input-group select, .input-group textarea { background-color: transparent; border: 1px solid var(--input-border); border-radius: 8px; padding: 12px; color: var(--text-color); font-family: inherit; font-size: 15px; }
 .input-group input:focus, .input-group textarea:focus, .input-group select:focus { border-color: var(--primary-color); outline: none; border-width: 2px; }
 .btn-icon { background-color: var(--primary-color); color: white; border: none; display: flex; align-items: center; justify-content: center; margin: 0; }
-.btn-agendar { background-color: #E0E0E0; color: black; border-radius: 20px; width: 100%; }
+.btn-agendar { background-color: var(--btn-secondary-bg); color: var(--btn-secondary-text); border-radius: 20px; width: 100%; }
 
 /* =========================================
    HISTORIAL DE CONVERSACIONES (Globos)
    ========================================= */
-.chat-bubble { background-color: #DCF8C6; color: #303030; padding: 12px 16px; border-radius: 16px 16px 16px 0px; max-width: 85%; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.12); display: flex; flex-direction: column; box-sizing: border-box; }
+.chat-bubble { background-color: var(--chat-bg); color: var(--chat-text); padding: 12px 16px; border-radius: 16px 16px 16px 0px; max-width: 85%; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.12); display: flex; flex-direction: column; box-sizing: border-box; }
 .chat-text { font-size: 14.5px; line-height: 1.4; white-space: pre-wrap; margin-bottom: 0; }
-.chat-meta { font-size: 11px; color: #666666; margin-top: 6px; align-self: flex-end; font-weight: 500; }
+.chat-meta { font-size: 11px; color: var(--chat-meta); margin-top: 6px; align-self: flex-end; font-weight: 500; }
 
 /* =========================================
    RINCÓN DE SERVICIO (ADMIN) - AHORA SÍ ADAPTABLE
@@ -194,19 +261,6 @@ button:active { opacity: 0.8; }
 }
 
 /* =========================================
-   AJUSTES EXCLUSIVOS PARA MODO OSCURO
-   ========================================= */
-@media (prefers-color-scheme: dark) {
-    .filtro-chip { background-color: #2C2C2C; color: #E0E0E0; border: 1px solid #404040; }
-    .visita-card { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .input-group input, .input-group select, .input-group textarea { border-color: #555; }
-    .btn-agendar { background-color: #333; color: white; }
-    .chat-bubble { background-color: #054735; color: #E2E8F0; }
-    .chat-meta { color: #94A3B8; }
-    .admin-card { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .admin-card:active { background-color: rgba(255,255,255,0.05); }
-}
-/* =========================================
    INVENTARIO DE MAPAS
    ========================================= */
 .inventario-item {
@@ -218,6 +272,6 @@ button:active { opacity: 0.8; }
 .inventario-info h4 { margin: 0; color: var(--text-color); font-size: 16px; display: flex; justify-content: space-between; align-items: center;}
 .inventario-info p { margin: 0; font-size: 13px; color: var(--text-muted); }
 
-.badge-libre { background: #E8F5E9; color: #2E7D32; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
-.badge-asignado { background: #FFF3E0; color: #E65100; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
-.badge-vencido { background: #FFEBEE; color: #C62828; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
+.badge-libre { background: var(--badge-libre-bg); color: var(--badge-libre-text); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
+.badge-asignado { background: var(--badge-asignado-bg); color: var(--badge-asignado-text); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
+.badge-vencido { background: var(--badge-vencido-bg); color: var(--badge-vencido-text); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
