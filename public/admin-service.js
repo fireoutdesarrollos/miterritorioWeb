@@ -1,7 +1,7 @@
 // ==========================================
-// ARCHIVO: admin-service.js (VERSIÓN DEFINITIVA Y ENSAMBLADA)
+// ARCHIVO: admin-service.js (VERSIÓN DEFINITIVA Y BLINDADA A PUNTOS)
 // ==========================================
-import { collection, doc, setDoc, onSnapshot, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, getDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 import { refrescarEstilosMapa } from "./map-service.js"; 
 
@@ -606,11 +606,9 @@ export function configurarPanelAdmin() {
                 const soySiervo = window.miUsuario.rol === 'siervo';
                 const miEmail = window.miUsuario.email;
                 
-                // Ordenamos: Primero los pendientes, luego alfabéticamente (Blindado contra nulos)
                 const listaEntradas = Object.entries(rolesMap).sort((a, b) => {
                     const rolA = String(a[1] || '');
                     const rolB = String(b[1] || '');
-
                     if (rolA === 'pendiente' && rolB !== 'pendiente') return -1;
                     if (rolB === 'pendiente' && rolA !== 'pendiente') return 1;
                     return rolA.localeCompare(rolB);
@@ -628,7 +626,6 @@ export function configurarPanelAdmin() {
                     card.style.alignItems = 'center'; 
                     card.style.gap = '10px';
                     
-                    // Resaltado visual para los pendientes
                     if (esPendiente) {
                         card.style.borderLeft = '4px solid #E65100';
                         card.style.backgroundColor = '#FFF3E0';
@@ -667,16 +664,18 @@ export function configurarPanelAdmin() {
                             select.onchange = async (e) => {
                                 const nuevoRol = e.target.value; 
                                 const emailTarget = e.target.getAttribute('data-email');
+                                
+                                // 🔥 ACÁ APLICAMOS LA VACUNA CONTRA LOS PUNTOS EN EL EMAIL 🔥
                                 if (nuevoRol === 'quitar') {
                                     if (confirm(`¿Seguro que quieres ${esPendiente ? 'rechazar' : 'quitar el acceso'} a ${nombreMostrar}?`)) {
-                                        delete rolesMap[emailTarget]; 
-                                        await setDoc(congRef, { roles: rolesMap }, { merge: true });
+                                        // Usamos setDoc con merge en lugar de updateDoc
+                                        await setDoc(congRef, { roles: { [emailTarget]: deleteField() } }, { merge: true });
                                     } else {
                                         e.target.value = rolActual;
                                     }
                                 } else {
-                                    rolesMap[emailTarget] = nuevoRol; 
-                                    await setDoc(congRef, { roles: rolesMap }, { merge: true });
+                                    // Usamos setDoc con merge en lugar de updateDoc
+                                    await setDoc(congRef, { roles: { [emailTarget]: nuevoRol } }, { merge: true });
                                 }
                             };
                         }

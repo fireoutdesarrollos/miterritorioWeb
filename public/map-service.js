@@ -6,7 +6,6 @@ window.pinesVisitas = [];
 let filtroActual = 'Todos';
 let todasLasVisitas = [];
 
-// NUEVO: Diccionarios para controlar qué manzanas están asignadas y sus textos en el mapa
 let mapasOcupados = {}; 
 let marcadoresMicroMap = {}; 
 
@@ -16,7 +15,6 @@ export function refrescarEstilosMapa() {
     const rol = window.miUsuario.rol;
     const miNombre = window.miUsuario.nombre.trim().toLowerCase();
 
-    // 1. PINTAR LOS POLÍGONOS (COLORES)
     window.mapaGlobal.data.setStyle((feature) => {
         const numTerritorio = feature.getProperty('territorio') || '-';
         const numManzana = feature.getProperty('numero') || '-';
@@ -33,18 +31,16 @@ export function refrescarEstilosMapa() {
         const puedeVerBloqueo = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
 
         if (window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta)) {
-            fillColor = '#6200EE'; fillOpacity = 0.7; strokeColor = 'white'; strokeWeight = 3; // Violeta de Selección
+            fillColor = '#6200EE'; fillOpacity = 0.7; strokeColor = 'white'; strokeWeight = 3;
         } else if (esMio) {
-            fillColor = '#4CAF50'; fillOpacity = 0.6; strokeColor = '#388E3C'; strokeWeight = 3; // Verde (REGLA 1: Mi territorio)
+            fillColor = '#4CAF50'; fillOpacity = 0.6; strokeColor = '#388E3C'; strokeWeight = 3;
         } else if (estaOcupado && puedeVerBloqueo) {
-            fillColor = '#424242'; fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2; // Gris Oscuro (REGLA 2 y 3: Territorio de otro)
+            fillColor = '#424242'; fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
         }
-        // Si no es mío, no soy conductor ni siervo, y está ocupado... se pinta normal. El publicador no se entera.
 
         return { fillColor, strokeColor, strokeWeight, fillOpacity };
     });
 
-    // 2. ACTUALIZAR LOS TEXTOS DE LAS MANZANAS
     for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
         const asignadoA = mapasOcupados[etiqueta];
         const estaOcupado = asignadoA !== undefined;
@@ -53,12 +49,12 @@ export function refrescarEstilosMapa() {
         let textoMostrar = etiqueta;
         
         if (esMio) {
-            textoMostrar = `⭐ ${etiqueta}`; // REGLA 1: Es mío
+            textoMostrar = `⭐ ${etiqueta}`; 
         } else if (estaOcupado && (rol === "siervo" || rol === "ayudante")) {
-            const soloNombre = asignadoA.split(' ')[0]; // Cortamos el apellido para que no tape el mapa
-            textoMostrar = `👤 ${etiqueta} (${soloNombre})`; // REGLA 3: Ve a quién se le asignó
+            const soloNombre = asignadoA.split(' ')[0]; 
+            textoMostrar = `👤 ${etiqueta} (${soloNombre})`; 
         } else if (estaOcupado && rol === "conductor") {
-            textoMostrar = `🔒 ${etiqueta}`; // REGLA 2: Bloqueado, pero no sabe quién lo tiene
+            textoMostrar = `🔒 ${etiqueta}`; 
         }
 
         marker.setLabel({ text: textoMostrar, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' });
@@ -73,8 +69,78 @@ function obtenerColorPin(estado) {
     return { path: google.maps.SymbolPath.CIRCLE, fillColor: color, fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 8 };
 }
 
+// ==========================================
+// MOTOR DE BÚSQUEDA INTELIGENTE (FUZZY SEARCH M3)
+// ==========================================
+function normalizarTexto(texto) {
+    if (!texto) return "";
+    return texto.toString().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Arranca tildes
+        .replace(/v/g, "b"); // Iguala V y B
+}
+
+function configurarAutocomplete(inputId, listId, opciones) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    if (!input || !list) return;
+
+    input.addEventListener('focus', () => renderList(input.value));
+    input.addEventListener('input', (e) => renderList(e.target.value));
+
+    document.addEventListener('click', (e) => {
+        if (e.target !== input && !list.contains(e.target)) list.style.display = 'none';
+    });
+
+    function renderList(query) {
+        list.innerHTML = '';
+        const queryWords = normalizarTexto(query).trim().split(/\s+/);
+        
+        const filtrados = opciones.filter(opc => {
+            const opcNorm = normalizarTexto(opc);
+            // Verifica que TODAS las palabras escritas estén en la opción (no importa el orden)
+            return queryWords.every(word => opcNorm.includes(word));
+        });
+        
+        if (filtrados.length === 0) {
+            list.style.display = 'none';
+            return;
+        }
+
+        filtrados.forEach(opc => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.textContent = opc;
+            item.onmousedown = (e) => { 
+                e.preventDefault(); 
+                input.value = opc;
+                list.style.display = 'none';
+            };
+            list.appendChild(item);
+        });
+        list.style.display = 'block';
+    }
+}
+
+let masterPubs = [];
+let masterVids = [];
+
+async function cargarListasMinisterio() {
+    try {
+        const docSnap = await getDoc(doc(db, "configuracion", "ministerio"));
+        if (docSnap.exists()) {
+            masterPubs = docSnap.data().publicaciones || [];
+            masterVids = docSnap.data().videos || [];
+            
+            configurarAutocomplete('ficha-publi', 'lista-pubs', masterPubs);
+            configurarAutocomplete('ficha-video', 'lista-vids', masterVids);
+        }
+    } catch (error) { console.error("Error al cargar listas:", error); }
+}
+
 export async function inicializarMapaYVisitas() {
-    // 1. ESCUCHAR INVENTARIO (Para saber qué manzanas están ocupadas)
+    // 0. Cargar listas y activar la búsqueda inteligente
+    cargarListasMinisterio();
+
     const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
     onSnapshot(gestionRef, (snapshot) => {
         mapasOcupados = {};
@@ -82,19 +148,9 @@ export async function inicializarMapaYVisitas() {
             const data = doc.data();
             if (!data.estaDisponible) mapasOcupados[doc.id] = data.asignadoA;
         });
-        refrescarEstilosMapa(); // Cuando alguien asigna un mapa, el mapa se repinta solo
+        refrescarEstilosMapa();
     });
 
-    // 2. Cargar Publicaciones en la Ficha
-    const ministerioSnap = await getDoc(doc(db, "configuracion", "ministerio"));
-    if (ministerioSnap.exists()) {
-        const dataMin = ministerioSnap.data();
-        const selectPubli = document.getElementById('ficha-publi'); const selectVideo = document.getElementById('ficha-video');
-        if (selectPubli && dataMin.publicaciones) dataMin.publicaciones.forEach(pub => { const o = document.createElement('option'); o.value = pub; o.textContent = pub; selectPubli.appendChild(o); });
-        if (selectVideo && dataMin.videos) dataMin.videos.forEach(vid => { const o = document.createElement('option'); o.value = vid; o.textContent = vid; selectVideo.appendChild(o); });
-    }
-
-    // 3. Escuchar la Libreta de Visitas
     const qVisitas = query(collection(db, "usuarios", window.miUsuario.email, "mis_visitas"), where("congregacionId", "==", window.miUsuario.congregacionId));
     onSnapshot(qVisitas, (snapshot) => {
         todasLasVisitas = [];
@@ -110,32 +166,124 @@ export async function inicializarMapaYVisitas() {
         });
     });
 
-    // 4. Guardar Ficha
+    const btnCerrar = document.getElementById('btn-cerrar-ficha');
+    if (btnCerrar) {
+        btnCerrar.onclick = () => { document.getElementById('ficha-modal').style.display = 'none'; };
+    }
+
     const btnGuardar = document.getElementById('btn-guardar-ficha');
     if (btnGuardar) {
         btnGuardar.onclick = async () => {
-            const vId = window.miUsuario.visitaActivaId; if (!vId) return;
+            const vId = window.miUsuario.visitaActivaId; 
+            if (!vId) return;
+
             const gn = (id) => document.getElementById(id) ? document.getElementById(id).value.trim() : '';
-            const iNotas = gn('ficha-notas'); const publi = gn('ficha-publi'); const video = gn('ficha-video'); const prox = gn('ficha-proximo');
             
-            let strNotas = window.miUsuario.visitaActivaNotas;
-            if (iNotas.length > 0) {
-                const d = new Date(); const f = `${d.getDate()} ${d.toLocaleString('es', {month:'short'})}. ${d.getFullYear()} - ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-                let msg = iNotas; if (publi) msg += `//📚 Publicación: ${publi}`; if (video) msg += `//🎬 Video: ${video}`; if (prox) msg += `//➡️ Próximo paso: ${prox}`;
-                const nEntrada = `${Date.now()}&&&${f}&&&${msg}`;
-                strNotas = strNotas !== "" ? `${strNotas}||${nEntrada}` : nEntrada;
+            const nuevoNombre = gn('ficha-nombre') || 'Nueva';
+            const nuevoApellido = gn('ficha-apellido') || 'Visita';
+            const nuevaDireccion = gn('ficha-direccion');
+            const nuevoEstado = gn('ficha-estado');
+            
+            const nuevaNotaHoy = gn('ficha-notas');
+            const publicacion = gn('ficha-publi');
+            const video = gn('ficha-video');
+            const proximoPaso = gn('ficha-proximo');
+
+            const hayNovedades = nuevaNotaHoy || publicacion || video || proximoPaso;
+
+            if (hayNovedades) {
+                const detallesDeEstaVisita = [];
+                if (nuevaNotaHoy) detallesDeEstaVisita.push(nuevaNotaHoy);
+                if (publicacion) detallesDeEstaVisita.push(`📚 Publicación: ${publicacion}`);
+                if (video) detallesDeEstaVisita.push(`🎬 Video: ${video}`);
+                if (proximoPaso) detallesDeEstaVisita.push(`➔ Próxima visita: ${proximoPaso}`);
+
+                if (detallesDeEstaVisita.length > 0) {
+                    const fechaHoy = formatearFechaHoy();
+                    const textoCompletoHistorial = detallesDeEstaVisita.join('\n');
+                    
+                    const yaExiste = window.listaNotasActuales.length > 0 && window.listaNotasActuales[0].texto === textoCompletoHistorial;
+                    
+                    if (!yaExiste) {
+                        window.listaNotasActuales.unshift({
+                            id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(),
+                            fecha: fechaHoy,
+                            texto: textoCompletoHistorial
+                        });
+                    }
+                }
             }
 
-            await setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", vId), {
-                nombre: gn('ficha-nombre') || 'Nueva', apellido: gn('ficha-apellido') || 'Visita', estado: gn('ficha-estado') || 'Nueva',
-                direccion: gn('ficha-direccion'), territorio: document.getElementById('ficha-terr').innerText, poligono: document.getElementById('ficha-manz').innerText,
-                publicacionDejada: publi, videoVisto: video, proximoPaso: prox, notas: strNotas, latitud: window.miUsuario.tempLat, longitud: window.miUsuario.tempLng, congregacionId: window.miUsuario.congregacionId, timestamp: Date.now()
-            }, { merge: true });
-            history.back(); 
+            const historialEmpaquetado = empaquetarNotasHistorial(window.listaNotasActuales);
+
+            const visitaActualizada = {
+                nombre: nuevoNombre,
+                apellido: nuevoApellido,
+                direccion: nuevaDireccion,
+                estado: nuevoEstado,
+                notas: historialEmpaquetado,
+                territorio: document.getElementById('ficha-terr').innerText,
+                poligono: document.getElementById('ficha-manz').innerText,
+                temaConversacion: "",
+                proximoPaso: "",
+                publicacionDejada: "",
+                videoVisto: "",
+                latitud: window.miUsuario.tempLat,
+                longitud: window.miUsuario.tempLng,
+                congregacionId: window.miUsuario.congregacionId,
+                timestamp: Date.now()
+            };
+
+            try {
+                await setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", vId), visitaActualizada, { merge: true });
+                document.getElementById('ficha-modal').style.display = 'none';
+            } catch (error) {
+                alert("Error al guardar: " + error.message);
+            }
         };
     }
 
-    // 5. Iniciar Google Maps
+    const btnAgendar = document.getElementById('btn-agendar-visita') || document.querySelector('.btn-agendar');
+    if (btnAgendar) {
+        btnAgendar.onclick = (e) => {
+            e.preventDefault(); 
+
+            const gn = (id) => document.getElementById(id) ? document.getElementById(id).value.trim() : '';
+            
+            const nombre = gn('ficha-nombre');
+            const apellido = gn('ficha-apellido');
+            const direccion = gn('ficha-direccion');
+            
+            const nuevaNotaHoy = gn('ficha-notas');
+            const publicacion = gn('ficha-publi');
+            const video = gn('ficha-video');
+            const proximoPaso = gn('ficha-proximo');
+
+            let tituloEvento = "Revisita";
+            if (nombre && nombre !== "Nueva") {
+                tituloEvento = `Revisita: ${nombre} ${apellido}`.trim();
+            }
+
+            const descExtras = [];
+            if (nuevaNotaHoy) descExtras.push(`Última charla: ${nuevaNotaHoy}`);
+            if (publicacion) descExtras.push(`Publicación que dejé: ${publicacion}`);
+            if (video) descExtras.push(`Video que vimos: ${video}`);
+            if (proximoPaso) descExtras.push(`Quedamos en: ${proximoPaso}`);
+
+            const descripcion = descExtras.join("\n\n");
+
+            const urlCalendario = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(tituloEvento)}&details=${encodeURIComponent(descripcion)}&location=${encodeURIComponent(direccion)}`;
+            
+            const linkFantasma = document.createElement('a');
+            linkFantasma.href = urlCalendario;
+            linkFantasma.target = '_blank';
+            linkFantasma.rel = 'noopener noreferrer';
+            document.body.appendChild(linkFantasma);
+            linkFantasma.click();
+            linkFantasma.remove(); 
+        };
+    }
+
     const llaveSnap = await getDoc(doc(db, "configuracion", "ApiKeys"));
     if (llaveSnap.exists()) {
         const scriptMapa = document.createElement('script');
@@ -161,52 +309,68 @@ export async function inicializarMapaYVisitas() {
                 }
             });
 
-            const snapshotM = await getDocs(collection(db, "congregaciones", window.miUsuario.congregacionId, "territorios"));
-            const bounds = new google.maps.LatLngBounds();
-            const marcadoresMacro = []; const agrupacionMacro = {};
+            try {
+                const congIdLimpio = window.miUsuario.congregacionId.toString().trim();
+                const snapshotReal = await getDocs(collection(db, "congregaciones", congIdLimpio, "territorios")); 
+                const bounds = new google.maps.LatLngBounds();
+                const centrosMacro = {};
 
-            snapshotM.forEach(doc => { if (doc.data().geojson) window.mapaGlobal.data.addGeoJson(JSON.parse(doc.data().geojson)); });
-            
-            window.mapaGlobal.data.forEach(feature => {
-                const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
-                const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
-                if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
-                
-                const textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
-                const mMicro = new google.maps.Marker({ position: fBounds.getCenter(), label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
-                
-                marcadoresMicroMap[textE] = mMicro; // Lo guardamos en el diccionario para cambiarle el texto después
-
-                if (numTerritorio) {
-                    if (!agrupacionMacro[numTerritorio]) agrupacionMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
-                    agrupacionMacro[numTerritorio].latSum += fBounds.getCenter().lat(); agrupacionMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); agrupacionMacro[numTerritorio].count++;
+                for (let documento of snapshotReal.docs) {
+                    try {
+                        const jsonString = documento.data().geojson;
+                        if (!jsonString) continue;
+                        window.mapaGlobal.data.addGeoJson(JSON.parse(jsonString));
+                    } catch(e){}
                 }
-            });
+                
+                window.mapaGlobal.data.forEach(feature => {
+                    const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
+                    const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
+                    if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
+                    
+                    const textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
+                    const mMicro = new google.maps.Marker({ position: fBounds.getCenter(), label: { text: textE, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } });
+                    
+                    marcadoresMicroMap[textE] = mMicro; 
 
-            Object.keys(agrupacionMacro).forEach(t => {
-                const d = agrupacionMacro[t];
-                marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
-            });
+                    if (numTerritorio) {
+                        if (!centrosMacro[numTerritorio]) centrosMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
+                        centrosMacro[numTerritorio].latSum += fBounds.getCenter().lat(); centrosMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); centrosMacro[numTerritorio].count++;
+                    }
+                });
 
-            window.mapaGlobal.addListener('zoom_changed', () => {
-                const z = window.mapaGlobal.getZoom();
-                if (z >= 15.5) { 
-                    Object.values(marcadoresMicroMap).forEach(m => m.setMap(window.mapaGlobal)); 
-                    marcadoresMacro.forEach(m => m.setMap(null)); 
-                } 
-                else if (z >= 13) { 
-                    Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
-                    marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); 
-                } 
-                else { 
-                    Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
-                    marcadoresMacro.forEach(m => m.setMap(null)); 
+                const marcadoresMacro = [];
+                Object.keys(centrosMacro).forEach(t => {
+                    const d = centrosMacro[t];
+                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
+                });
+
+                window.mapaGlobal.addListener('zoom_changed', () => {
+                    const z = window.mapaGlobal.getZoom();
+                    if (z >= 15.5) { 
+                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(window.mapaGlobal)); 
+                        marcadoresMacro.forEach(m => m.setMap(null)); 
+                    } 
+                    else if (z >= 13) { 
+                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
+                        marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); 
+                    } 
+                    else { 
+                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
+                        marcadoresMacro.forEach(m => m.setMap(null)); 
+                    }
+                });
+
+                if (snapshotReal.size > 0) { 
+                    window.mapaGlobal.fitBounds(bounds); 
+                    google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); 
                 }
-            });
+            } catch (error) {
+                console.error("Escudo activado: ", error);
+            }
 
-            if (snapshotM.size > 0) { window.mapaGlobal.fitBounds(bounds); google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); }
             renderizarVisitas();
-            refrescarEstilosMapa(); // Fuerza la primera pintura
+            refrescarEstilosMapa(); 
         };
         document.head.appendChild(scriptMapa);
     }
@@ -218,7 +382,7 @@ function renderizarVisitas() {
     window.pinesVisitas.forEach(pin => pin.setMap(null)); window.pinesVisitas = [];
 
     const visitasFiltradas = todasLasVisitas.filter(v => (filtroActual === 'Todos' || v.estado === filtroActual));
-    if (visitasFiltradas.length === 0) { visitasContainer.innerHTML = `<p style="color: gray; text-align: center; margin-top: 40px;">No hay visitas.</p>`; return; }
+    if (visitasFiltradas.length === 0) { visitasContainer.innerHTML = `<p style="color: var(--text-muted); text-align: center; margin-top: 40px;">No hay visitas registradas.</p>`; return; }
 
     visitasFiltradas.forEach(visita => {
         if (window.mapaGlobal && visita.latitud && visita.longitud) {
@@ -226,7 +390,14 @@ function renderizarVisitas() {
             pin.addListener('click', () => { if(!window.modoRegistroActivo) abrirFichaVisita(visita); });
             window.pinesVisitas.push(pin);
         }
-        let colorPinLista = '#FF9800'; if (visita.estado === 'Nueva') colorPinLista = '#2196F3'; if (visita.estado === 'Ausente') colorPinLista = '#F44336'; if (visita.estado === 'Revisita') colorPinLista = '#4CAF50'; if (visita.estado === 'Estudio') colorPinLista = '#FFEB3B'; if (visita.estado === 'No visitar') colorPinLista = '#9C27B0'; 
+        
+        let colorPinLista = '#FF9800'; 
+        if (visita.estado === 'Nueva') colorPinLista = '#2196F3'; 
+        if (visita.estado === 'Ausente') colorPinLista = '#F44336'; 
+        if (visita.estado === 'Revisita') colorPinLista = '#4CAF50'; 
+        if (visita.estado === 'Estudio') colorPinLista = '#FFEB3B'; 
+        if (visita.estado === 'No visitar') colorPinLista = '#9C27B0'; 
+        
         const nombreMostrar = (visita.nombre === 'Nueva' && visita.apellido === 'Visita') ? 'Visita Nueva' : `${visita.nombre} ${visita.apellido}`;
         const fecha = new Date(visita.timestamp || Date.now()).toLocaleDateString();
 
@@ -236,29 +407,101 @@ function renderizarVisitas() {
     });
 }
 
+function parsearNotasHistorial(notesRaw) {
+    if (!notesRaw || notesRaw.trim() === '') return [];
+    
+    if (notesRaw.trim().startsWith("[")) {
+        try { return JSON.parse(notesRaw); } catch(e) {}
+    }
+
+    try {
+        return notesRaw.split("|||").map(str => {
+            const parts = str.split("&&&");
+            if (parts.length === 3) {
+                return { id: parts[0], fecha: parts[1], texto: parts[2].replace(/\/\/\//g, "\n") };
+            }
+            return null;
+        }).filter(Boolean);
+    } catch(e) {
+        return [{ id: Date.now().toString(), fecha: "Historial Previo", texto: notesRaw }];
+    }
+}
+
+function empaquetarNotasHistorial(listaNotas) {
+    if (!listaNotas || listaNotas.length === 0) return "";
+    return listaNotas.map(nota => `${nota.id}&&&${nota.fecha}&&&${nota.texto.replace(/\n/g, "///")}`).join("|||");
+}
+
+function formatearFechaHoy() {
+    const meses = ["ene.","feb.","mar.","abr.","may.","jun.","jul.","ago.","sep.","oct.","nov.","dic."];
+    const d = new Date();
+    const dia = d.getDate().toString().padStart(2, '0');
+    const mes = meses[d.getMonth()];
+    const anio = d.getFullYear();
+    const hora = d.getHours().toString().padStart(2, '0');
+    const min = d.getMinutes().toString().padStart(2, '0');
+    return `${dia} ${mes} ${anio} - ${hora}:${min}`; 
+}
+
 function abrirFichaVisita(visita) {
-    history.pushState({ page: 'modal_ficha' }, '', '');
-    window.miUsuario.visitaActivaId = visita.id; window.miUsuario.visitaActivaNotas = visita.notas || "";
-    window.miUsuario.tempLat = visita.latitud || 0; window.miUsuario.tempLng = visita.longitud || 0;
+    window.miUsuario.visitaActivaId = visita.id;
+    window.miUsuario.tempLat = visita.latitud || 0; 
+    window.miUsuario.tempLng = visita.longitud || 0;
 
     const gn = (id) => document.getElementById(id);
     if(gn('ficha-nombre')) gn('ficha-nombre').value = visita.nombre !== 'Nueva' ? visita.nombre : '';
     if(gn('ficha-apellido')) gn('ficha-apellido').value = visita.apellido !== 'Visita' ? visita.apellido : '';
-    if(gn('ficha-terr')) gn('ficha-terr').innerText = visita.territorio || '-'; if(gn('ficha-manz')) gn('ficha-manz').innerText = visita.poligono || '-';
-    if(gn('ficha-estado')) gn('ficha-estado').value = visita.estado || 'Nueva'; if(gn('ficha-direccion')) gn('ficha-direccion').value = visita.direccion || '';
-    if(gn('ficha-publi')) gn('ficha-publi').value = visita.publicacionDejada || ''; if(gn('ficha-video')) gn('ficha-video').value = visita.videoVisto || '';
-    if(gn('ficha-proximo')) gn('ficha-proximo').value = visita.proximoPaso || ''; if(gn('ficha-notas')) gn('ficha-notas').value = ''; 
+    if(gn('ficha-terr')) gn('ficha-terr').innerText = visita.territorio || '-'; 
+    if(gn('ficha-manz')) gn('ficha-manz').innerText = visita.poligono || '-';
+    if(gn('ficha-estado')) gn('ficha-estado').value = visita.estado || 'Nueva'; 
+    if(gn('ficha-direccion')) gn('ficha-direccion').value = visita.direccion || '';
+    
+    if(gn('ficha-publi')) gn('ficha-publi').value = ''; 
+    if(gn('ficha-video')) gn('ficha-video').value = '';
+    if(gn('ficha-proximo')) gn('ficha-proximo').value = ''; 
+    if(gn('ficha-notas')) gn('ficha-notas').value = ''; 
 
-    const chatContainer = document.getElementById('historial-conversaciones-container');
-    if (chatContainer) {
-        chatContainer.innerHTML = '';
-        if (!visita.notas || visita.notas.trim() === '') chatContainer.innerHTML = '<p style="color:gray;font-size:13px;text-align:center;">No hay conversaciones registradas.</p>';
-        else {
-            visita.notas.split('||').filter(e => e.trim() !== '').forEach(entrada => {
-                const p = entrada.split('&&&'); const f = p.length >= 3 ? p[1] : (p.length === 2 ? p[0] : "Desconocida"); const c = p.length >= 3 ? p.slice(2).join('&&&') : (p.length === 2 ? p[1] : entrada);
-                const div = document.createElement('div'); div.className = 'chat-bubble'; div.innerHTML = `<div class="chat-text">${c.replace(/\/\//g, '<br><br>• ')}</div><div class="chat-meta">📅 ${f}</div>`; chatContainer.appendChild(div);
-            });
-        }
+    const titulo = document.getElementById('ficha-titulo');
+    if (titulo) {
+        titulo.innerText = visita.nombre === 'Nueva' ? "Registrar Visita" : `Ficha de ${visita.nombre}`;
     }
+
+    window.listaNotasActuales = parsearNotasHistorial(visita.notas || "");
+
+    function renderizarHistorial() {
+        const container = document.getElementById('historial-conversaciones-container');
+        container.innerHTML = '';
+        
+        if (window.listaNotasActuales.length === 0) {
+            container.innerHTML = `<p style="color: var(--text-muted); font-size: 14px;">No hay conversaciones previas registradas.</p>`;
+            return;
+        }
+
+        window.listaNotasActuales.forEach(nota => {
+            const card = document.createElement('div');
+            card.className = 'chat-bubble';
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div class="chat-meta">${nota.fecha}</div>
+                    <span style="color:var(--error-text); cursor:pointer; font-size:14px; font-weight:bold; padding: 0 5px;" class="btn-borrar-nota">✕</span>
+                </div>
+                <div class="chat-text">${nota.texto}</div>
+            `;
+            
+            card.querySelector('.btn-borrar-nota').onclick = () => {
+                if(confirm("¿Seguro que deseas eliminar esta conversación del historial?")) {
+                    window.listaNotasActuales = window.listaNotasActuales.filter(n => n.id !== nota.id);
+                    renderizarHistorial();
+                    
+                    const visitaActualizada = { notas: empaquetarNotasHistorial(window.listaNotasActuales) };
+                    setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", visita.id), visitaActualizada, { merge: true });
+                }
+            };
+            container.appendChild(card);
+        });
+    }
+    
+    renderizarHistorial();
+
     if (gn('ficha-modal')) gn('ficha-modal').style.display = 'flex';
 }
