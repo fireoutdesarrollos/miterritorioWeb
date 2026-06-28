@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: auth-service.js (VERSIÓN v1.6.6 - CON ONBOARDING DE USUARIO)
+// ARCHIVO: auth-service.js (VERSIÓN v1.6.7 - COMPATIBLE CON ANDROID)
 // ==========================================
 import { signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { doc, getDoc, collection, getDocs, updateDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
@@ -9,7 +9,7 @@ import { inicializarMapaYVisitas } from "./map-service.js";
 import { configurarPanelAdmin } from "./admin-service.js";
 
 // 👇 CONTROL DE CACHÉ ACTIVO 👇
-const WEB_VERSION = "v1.6.6"; 
+const WEB_VERSION = "v1.6.7"; 
 
 aplicarTemaInicial();
 
@@ -34,7 +34,8 @@ export function iniciarAutenticacion() {
             if (loginSection) loginSection.style.display = 'none';
             if (dashboardSection) dashboardSection.style.display = 'block';
 
-            const email = user.email;
+            // 🔥 ESCUDO ANTIMAYÚSCULAS: Forzamos minúsculas para que Firebase no bloquee por reglas de seguridad
+            const email = user.email.toLowerCase();
             const userSnap = await getDoc(doc(db, "usuarios", email));
 
             // 🔥 FILTRO DE PRIMER INGRESO (ONBOARDING) 🔥
@@ -43,7 +44,7 @@ export function iniciarAutenticacion() {
                 const nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido || ''}`.trim();
                 continuarFlujoAutenticacion(email, nombreCompleto);
             } else {
-                // ¡Es nuevo! Le pedimos el nombre y apellido
+                // ¡Es nuevo o no se guardó bien! Le pedimos el nombre y apellido
                 mostrarPantallaOnboarding(email, user.displayName || "");
             }
 
@@ -63,7 +64,6 @@ export function iniciarAutenticacion() {
 function mostrarPantallaOnboarding(email, googleName) {
     toggleContenidoApp(false);
 
-    // Intentamos pre-llenar los campos desarmando el nombre que nos da Google
     let preNombre = ""; let preApellido = "";
     if (googleName) {
         const partes = googleName.split(' ');
@@ -108,18 +108,20 @@ function mostrarPantallaOnboarding(email, googleName) {
         document.getElementById('btn-guardar-onboarding').disabled = true;
 
         try {
-            // Guardamos al hermano en la colección general
+            // 🔥 PARCHE ANDROID: Guardamos el perfil con TODOS los campos que Android podría requerir
+            const nombreCompletoArmado = `${nombre} ${apellido}`.trim();
             await setDoc(doc(db, "usuarios", email), {
+                email: email, 
                 nombre: nombre,
                 apellido: apellido,
+                nombreCompleto: nombreCompletoArmado,
                 fechaRegistro: Date.now()
             }, { merge: true });
 
-            const nombreCompleto = `${nombre} ${apellido}`.trim();
             contenedor.remove();
             
             // Reanudamos el motor de la app
-            continuarFlujoAutenticacion(email, nombreCompleto);
+            continuarFlujoAutenticacion(email, nombreCompletoArmado);
 
         } catch (error) {
             alert("Error al guardar: " + error.message);
