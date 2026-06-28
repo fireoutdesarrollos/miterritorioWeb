@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: auth-service.js (VERSIÓN v1.6.5 - INMUNE A PUNTOS)
+// ARCHIVO: auth-service.js (VERSIÓN v1.6.6 - CON ONBOARDING DE USUARIO)
 // ==========================================
 import { signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { doc, getDoc, collection, getDocs, updateDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
@@ -9,7 +9,7 @@ import { inicializarMapaYVisitas } from "./map-service.js";
 import { configurarPanelAdmin } from "./admin-service.js";
 
 // 👇 CONTROL DE CACHÉ ACTIVO 👇
-const WEB_VERSION = "v1.6.5"; 
+const WEB_VERSION = "v1.6.6"; 
 
 aplicarTemaInicial();
 
@@ -35,23 +35,17 @@ export function iniciarAutenticacion() {
             if (dashboardSection) dashboardSection.style.display = 'block';
 
             const email = user.email;
-            let nombreCompleto = user.displayName || "Hermano";
-
             const userSnap = await getDoc(doc(db, "usuarios", email));
-            if (userSnap.exists()) {
-                nombreCompleto = `${userSnap.data().nombre || ''} ${userSnap.data().apellido || ''}`.trim();
-            }
 
-            window.miUsuario = { email, nombre: nombreCompleto, rol: null, congregacionId: null, congregacionNombre: null };
-            let miCongregacionId = localStorage.getItem('miCongregacionId');
-
-            if (miCongregacionId) {
-                activarVigilanteRealtime(email, miCongregacionId, nombreCompleto);
+            // 🔥 FILTRO DE PRIMER INGRESO (ONBOARDING) 🔥
+            if (userSnap.exists() && userSnap.data().nombre) {
+                // El usuario ya existe en la base de datos, seguimos de largo
+                const nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido || ''}`.trim();
+                continuarFlujoAutenticacion(email, nombreCompleto);
             } else {
-                mostrarBuscadorCongregaciones(email, nombreCompleto);
+                // ¡Es nuevo! Le pedimos el nombre y apellido
+                mostrarPantallaOnboarding(email, user.displayName || "");
             }
-            
-            inyectarBotonPerfil(nombreCompleto);
 
         } else {
             if (loginSection) loginSection.style.display = 'flex'; 
@@ -64,6 +58,87 @@ export function iniciarAutenticacion() {
             window.motoresArrancados = false; 
         }
     });
+}
+
+function mostrarPantallaOnboarding(email, googleName) {
+    toggleContenidoApp(false);
+
+    // Intentamos pre-llenar los campos desarmando el nombre que nos da Google
+    let preNombre = ""; let preApellido = "";
+    if (googleName) {
+        const partes = googleName.split(' ');
+        preNombre = partes[0] || "";
+        preApellido = partes.slice(1).join(' ') || "";
+    }
+
+    let contenedor = document.getElementById('contenedor-onboarding');
+    if (!contenedor) {
+        contenedor = document.createElement('div');
+        contenedor.id = 'contenedor-onboarding';
+        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+        document.body.appendChild(contenedor);
+    }
+
+    contenedor.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box;">
+            <h3 style="margin: 0 0 8px 0; color: #333; font-size: 22px; text-align: center;">¡Bienvenido a Mi Territorio!</h3>
+            <p style="color: #666; margin-bottom: 24px; font-size: 14px; text-align: center;">Para empezar, dinos cómo te llamas:</p>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 13px; color: gray; font-weight: bold; margin-bottom: 6px;">Nombre</label>
+                <input type="text" id="onboarding-nombre" value="${preNombre}" placeholder="Ej: Juan" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 15px; outline: none;">
+            </div>
+            
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; font-size: 13px; color: gray; font-weight: bold; margin-bottom: 6px;">Apellido</label>
+                <input type="text" id="onboarding-apellido" value="${preApellido}" placeholder="Ej: Perez" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 15px; outline: none;">
+            </div>
+            
+            <button id="btn-guardar-onboarding" style="width: 100%; background: var(--primary-color, #6200EE); color: white; border: none; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">Continuar</button>
+        </div>
+    `;
+
+    document.getElementById('btn-guardar-onboarding').onclick = async () => {
+        const nombre = document.getElementById('onboarding-nombre').value.trim();
+        const apellido = document.getElementById('onboarding-apellido').value.trim();
+
+        if (!nombre) return alert("Por favor, ingresa al menos tu nombre.");
+
+        document.getElementById('btn-guardar-onboarding').innerText = "Guardando...";
+        document.getElementById('btn-guardar-onboarding').disabled = true;
+
+        try {
+            // Guardamos al hermano en la colección general
+            await setDoc(doc(db, "usuarios", email), {
+                nombre: nombre,
+                apellido: apellido,
+                fechaRegistro: Date.now()
+            }, { merge: true });
+
+            const nombreCompleto = `${nombre} ${apellido}`.trim();
+            contenedor.remove();
+            
+            // Reanudamos el motor de la app
+            continuarFlujoAutenticacion(email, nombreCompleto);
+
+        } catch (error) {
+            alert("Error al guardar: " + error.message);
+            document.getElementById('btn-guardar-onboarding').innerText = "Continuar";
+            document.getElementById('btn-guardar-onboarding').disabled = false;
+        }
+    };
+}
+
+function continuarFlujoAutenticacion(email, nombreCompleto) {
+    window.miUsuario = { email, nombre: nombreCompleto, rol: null, congregacionId: null, congregacionNombre: null };
+    let miCongregacionId = localStorage.getItem('miCongregacionId');
+
+    if (miCongregacionId) {
+        activarVigilanteRealtime(email, miCongregacionId, nombreCompleto);
+    } else {
+        mostrarBuscadorCongregaciones(email, nombreCompleto);
+    }
+    inyectarBotonPerfil(nombreCompleto);
 }
 
 function aplicarTemaInicial() {
@@ -174,8 +249,6 @@ function mostrarPantallaPerfil() {
 
     document.body.appendChild(modal);
     document.getElementById('btn-cerrar-perfil').onclick = () => modal.remove();
-
-    // LÓGICA DE DETALLES EDITAR DATOS ELIMINADA POR BREVEDAD PARA EL CAMBIO
 }
 
 function normalizarTexto(texto) {
@@ -254,7 +327,6 @@ function mostrarBuscadorCongregaciones(email, nombreCompleto) {
                                 localStorage.setItem('miCongregacionId', cong.id);
                                 activarVigilanteRealtime(email, cong.id, nombreCompleto);
                             } else {
-                                // 🔥 PARCHE HISTÓRICO CORREGIDO AQUÍ: setDoc con merge evita el error de los puntos en el email
                                 await setDoc(docRef, { roles: { [email]: "pendiente" } }, { merge: true });
                                 localStorage.setItem('miCongregacionId', cong.id);
                                 activarVigilanteRealtime(email, cong.id, nombreCompleto);
