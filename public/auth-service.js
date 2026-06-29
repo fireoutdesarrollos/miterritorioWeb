@@ -195,7 +195,7 @@ function mostrarPantallaPerfil() {
     const congregacionTexto = congId ? `Cong. ${congNombre} (${congId}) • ${rolTexto}` : 'Sin congregación asignada';
 
     const opcionesTemasTextos = { 'light': 'Claro', 'dark': 'Oscuro', 'system': 'Automático (Sistema)' };
-    const temaActualTxt = opcionesTemasTextos[localStorage.getItem('themePref') || 'system'];
+    let temaActual = localStorage.getItem('themePref') || 'system';
 
     modal = document.createElement('div');
     modal.id = 'modal-perfil-usuario';
@@ -207,7 +207,7 @@ function mostrarPantallaPerfil() {
         </div>
         
         <div style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
-            <div style="width: 90px; height: 90px; border-radius: 50%; background-color: #CBA4FF; color: white; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold; margin-bottom: 16px;">
+            <div style="width: 90px; height: 90px; border-radius: 50%; background-color: #CBA4FF; color: #4A148C; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold; margin-bottom: 16px;">
                 ${iniciales}
             </div>
             <h2 style="color: white; margin: 0 0 4px 0; font-size: 24px;">${window.miUsuario.nombre}</h2>
@@ -226,7 +226,7 @@ function mostrarPantallaPerfil() {
             </div>
             <div class="perfil-opcion" id="opc-tema" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
                 <span style="color: white; margin-right: 16px; font-size: 20px;">⚙️</span>
-                <span style="color: white; font-size: 16px;">Tema: ${temaActualTxt}</span>
+                <span id="txt-tema-actual" style="color: white; font-size: 16px;">Tema: ${opcionesTemasTextos[temaActual]}</span>
             </div>
             <div class="perfil-opcion" id="opc-cambiar-cong" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
                 <span style="color: white; margin-right: 16px; font-size: 20px;">🔄</span>
@@ -250,7 +250,96 @@ function mostrarPantallaPerfil() {
     `;
 
     document.body.appendChild(modal);
+
+    // ==========================================
+    // LÓGICA DE LOS BOTONES
+    // ==========================================
+
     document.getElementById('btn-cerrar-perfil').onclick = () => modal.remove();
+
+    // 1. Editar Datos
+    document.getElementById('opc-editar-datos').onclick = async () => {
+        const partes = window.miUsuario.nombre.split(' ');
+        const viejoNombre = partes[0] || '';
+        const viejoApellido = partes.slice(1).join(' ') || '';
+        
+        const nuevoNombre = prompt("Tu nombre:", viejoNombre);
+        if (nuevoNombre === null) return; 
+        const nuevoApellido = prompt("Tu apellido:", viejoApellido);
+        if (nuevoApellido === null) return;
+        
+        if (nuevoNombre.trim() === '') return alert("El nombre no puede estar vacío.");
+        
+        const nombreArmado = `${nuevoNombre.trim()} ${nuevoApellido.trim()}`.trim();
+        
+        try {
+            await setDoc(doc(db, "usuarios", window.miUsuario.email), {
+                nombre: nuevoNombre.trim(),
+                apellido: nuevoApellido.trim(),
+                nombreCompleto: nombreArmado
+            }, { merge: true });
+            
+            window.miUsuario.nombre = nombreArmado;
+            alert("¡Datos actualizados correctamente!");
+            modal.remove();
+            mostrarPantallaPerfil(); // Recargamos para ver los cambios
+        } catch (error) {
+            alert("Error al actualizar: " + error.message);
+        }
+    };
+
+    // 2. Cambiar Tema (Modo Noche/Día)
+    document.getElementById('opc-tema').onclick = () => {
+        const temas = ['system', 'light', 'dark'];
+        const actualIdx = temas.indexOf(temaActual);
+        const siguienteIdx = (actualIdx + 1) % temas.length;
+        temaActual = temas[siguienteIdx];
+        
+        localStorage.setItem('themePref', temaActual);
+        
+        if (temaActual === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        else if (temaActual === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        else document.documentElement.removeAttribute('data-theme');
+        
+        document.getElementById('txt-tema-actual').innerText = `Tema: ${opcionesTemasTextos[temaActual]}`;
+    };
+
+    // 3. Cambiar de Congregación
+    document.getElementById('opc-cambiar-cong').onclick = () => {
+        if (confirm("¿Estás seguro de que deseas salir de tu congregación actual? Tendrás que solicitar acceso nuevamente si deseas volver.")) {
+            localStorage.removeItem('miCongregacionId');
+            location.reload();
+        }
+    };
+
+    // 4. Reportar problema o idea
+    document.getElementById('opc-reportar').onclick = async () => {
+        const mensaje = prompt("Describe el problema o la idea que tienes:");
+        if (!mensaje || !mensaje.trim()) return;
+        
+        try {
+            const nuevoId = Date.now().toString();
+            await setDoc(doc(db, "reportes_ideas", nuevoId), {
+                email: window.miUsuario.email,
+                nombre: window.miUsuario.nombre,
+                mensaje: mensaje.trim(),
+                fecha: Date.now(),
+                congregacionId: window.miUsuario.congregacionId || "Ninguna"
+            });
+            alert("¡Gracias! Tu mensaje fue enviado con éxito y los desarrolladores lo revisarán pronto.");
+        } catch (e) {
+            alert("Error al enviar el reporte: " + e.message);
+        }
+    };
+
+    // 5. Cerrar Sesión
+    document.getElementById('opc-cerrar-sesion').onclick = async () => {
+        if (confirm("¿Seguro que deseas cerrar sesión en este dispositivo?")) {
+            await signOut(auth);
+            modal.remove();
+            location.reload();
+        }
+    };
 }
 
 function normalizarTexto(texto) {
