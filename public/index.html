@@ -196,14 +196,39 @@
                 </div>
             </div>
 
+            <style>
+                .btn-gps-android {
+                    background-color: #CBA4FF !important;
+                    border: none !important;
+                    border-radius: 16px !important;
+                    width: 54px !important;
+                    height: 54px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    cursor: pointer !important;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+                    transition: transform 0.15s ease, background-color 0.2s ease !important;
+                    flex-shrink: 0 !important;
+                    margin-bottom: 15px !important;
+                }
+                .btn-gps-android:active {
+                    transform: scale(0.92) !important;
+                    background-color: #B485FF !important;
+                }
+            </style>
+            
             <div class="form-row" style="align-items: flex-end;">
                 <div class="input-group" style="flex: 1;">
                     <label>📍 Dirección</label>
-                    <input type="text" id="ficha-direccion">
+                    <input type="text" id="ficha-direccion" placeholder="Ej: Calle 123...">
                 </div>
-                <button class="btn-icon" id="btn-ir-mapa" style="height: 48px; width: 48px; border-radius: 12px; margin-bottom: 15px;">🗺️</button>
+                <button id="btn-ir-gps" class="btn-gps-android" title="Navegar al destino">
+                    <svg viewBox="0 0 24 24" fill="#311B92" width="28px" height="28px" style="pointer-events: none;">
+                        <path d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.38.39-1.01 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/>
+                    </svg>
+                </button>
             </div>
-
             <div style="height: 12px;"></div>
 
             <h3 style="color: var(--primary-color); font-size: 16px; margin: 0 0 8px 0; font-weight: bold;">🗣️ Qué hablamos hoy</h3>

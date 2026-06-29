@@ -1,7 +1,7 @@
 // ==========================================
-// ARCHIVO: auth-service.js (VERSIÓN v1.6.7 - COMPATIBLE CON ANDROID)
+// ARCHIVO: auth-service.js (VERSIÓN v1.7.0 - CREAR CONG. NATIVO M3)
 // ==========================================
-import { signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { doc, getDoc, collection, getDocs, updateDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 import { auth, provider, db } from "./firebase-core.js";
@@ -9,7 +9,7 @@ import { inicializarMapaYVisitas } from "./map-service.js";
 import { configurarPanelAdmin } from "./admin-service.js";
 
 // 👇 CONTROL DE CACHÉ ACTIVO 👇
-const WEB_VERSION = "v1.6.7"; 
+const WEB_VERSION = "v1.7.6"; 
 
 aplicarTemaInicial();
 
@@ -22,7 +22,8 @@ export function iniciarAutenticacion() {
         btnLogin.addEventListener('click', async () => {
             btnLogin.innerText = "Conectando con Google...";
             try {
-                await signInWithPopup(auth, provider);
+                // CAMBIO: signInWithRedirect en lugar de signInWithPopup
+                await signInWithRedirect(auth, provider); 
             } catch (error) {
                 btnLogin.innerText = "Error. Intentar de nuevo";
             }
@@ -34,17 +35,13 @@ export function iniciarAutenticacion() {
             if (loginSection) loginSection.style.display = 'none';
             if (dashboardSection) dashboardSection.style.display = 'block';
 
-            // 🔥 ESCUDO ANTIMAYÚSCULAS: Forzamos minúsculas para que Firebase no bloquee por reglas de seguridad
             const email = user.email.toLowerCase();
             const userSnap = await getDoc(doc(db, "usuarios", email));
 
-            // 🔥 FILTRO DE PRIMER INGRESO (ONBOARDING) 🔥
             if (userSnap.exists() && userSnap.data().nombre) {
-                // El usuario ya existe en la base de datos, seguimos de largo
                 const nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido || ''}`.trim();
                 continuarFlujoAutenticacion(email, nombreCompleto);
             } else {
-                // ¡Es nuevo o no se guardó bien! Le pedimos el nombre y apellido
                 mostrarPantallaOnboarding(email, user.displayName || "");
             }
 
@@ -108,7 +105,6 @@ function mostrarPantallaOnboarding(email, googleName) {
         document.getElementById('btn-guardar-onboarding').disabled = true;
 
         try {
-            // 🔥 PARCHE ANDROID: Guardamos el perfil con TODOS los campos que Android podría requerir
             const nombreCompletoArmado = `${nombre} ${apellido}`.trim();
             await setDoc(doc(db, "usuarios", email), {
                 email: email, 
@@ -119,8 +115,6 @@ function mostrarPantallaOnboarding(email, googleName) {
             }, { merge: true });
 
             contenedor.remove();
-            
-            // Reanudamos el motor de la app
             continuarFlujoAutenticacion(email, nombreCompletoArmado);
 
         } catch (error) {
@@ -145,13 +139,9 @@ function continuarFlujoAutenticacion(email, nombreCompleto) {
 
 function aplicarTemaInicial() {
     const pref = localStorage.getItem('themePref') || 'system';
-    if (pref === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else if (pref === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-        document.documentElement.removeAttribute('data-theme');
-    }
+    if (pref === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else if (pref === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
 }
 
 function inyectarBotonPerfil(nombreCompleto) {
@@ -167,16 +157,26 @@ function inyectarBotonPerfil(nombreCompleto) {
     btnPerfil.onclick = () => mostrarPantallaPerfil();
     
     const contenedorIconos = document.querySelector('.app-icons');
-    if (contenedorIconos) {
-        contenedorIconos.appendChild(btnPerfil);
-    } else {
-        document.body.appendChild(btnPerfil);
-    }
+    if (contenedorIconos) contenedorIconos.appendChild(btnPerfil);
+    else document.body.appendChild(btnPerfil);
 }
 
-function mostrarPantallaPerfil() {
+async function mostrarPantallaPerfil() {
     let modal = document.getElementById('modal-perfil-usuario');
     if (modal) modal.remove();
+
+    const storage = getStorage();
+    let fotoPerfilUrl = ""; let videoPerfilUrl = ""; let audioPerfilUrl = "";
+    
+    try {
+        const uSnap = await getDoc(doc(db, "usuarios", window.miUsuario.email));
+        if (uSnap.exists()) {
+            const data = uSnap.data();
+            fotoPerfilUrl = data.fotoPerfil || "";
+            videoPerfilUrl = data.videoPerfil || "";
+            audioPerfilUrl = data.audioPerfil || "";
+        }
+    } catch (e) { console.error("Error al obtener archivos:", e); }
 
     const iniciales = window.miUsuario.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
     
@@ -191,153 +191,383 @@ function mostrarPantallaPerfil() {
     const congNombre = window.miUsuario.congregacionNombre || "Suarez";
     const congId = window.miUsuario.congregacionId || "";
     const rolTexto = rolesMapeados[window.miUsuario.rol] || "Sin rol";
-
     const congregacionTexto = congId ? `Cong. ${congNombre} (${congId}) • ${rolTexto}` : 'Sin congregación asignada';
 
-    const opcionesTemasTextos = { 'light': 'Claro', 'dark': 'Oscuro', 'system': 'Automático (Sistema)' };
+    const opcionesTemasTextos = { 'light': 'Claro', 'dark': 'Oscuro', 'system': 'Automático' };
     let temaActual = localStorage.getItem('themePref') || 'system';
 
     modal = document.createElement('div');
     modal.id = 'modal-perfil-usuario';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2B2A33; z-index: 9999; display: flex; flex-direction: column; overflow-y: auto; font-family: sans-serif;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20, 20, 25, 0.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; padding: 10px;';
     
     modal.innerHTML = `
-        <div style="padding: 16px; display: flex; align-items: center;">
-            <button id="btn-cerrar-perfil" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">✕</button>
-        </div>
-        
-        <div style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
-            <div style="width: 90px; height: 90px; border-radius: 50%; background-color: #CBA4FF; color: #4A148C; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold; margin-bottom: 16px;">
-                ${iniciales}
+        <div style="background: #1E1D24; width: 100%; max-width: 480px; max-height: 92vh; border-radius: 28px; border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.6); position: relative;">
+            <div style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0;">
+                <span style="color: white; font-weight: bold; font-size: 16px;">Perfil de Usuario</span>
+                <button id="btn-cerrar-perfil" style="background: rgba(255,255,255,0.06); border: none; color: white; font-size: 16px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">✕</button>
             </div>
-            <h2 style="color: white; margin: 0 0 4px 0; font-size: 24px;">${window.miUsuario.nombre}</h2>
-            <p style="color: #A0A0A0; margin: 0 0 16px 0; font-size: 14px;">${window.miUsuario.email}</p>
-            <div style="background-color: #3F3E47; color: #E0E0E0; padding: 6px 16px; border-radius: 20px; font-size: 13px;">
-                ${congregacionTexto}
-            </div>
-        </div>
+            
+            <div style="flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; box-sizing: border-box;">
+                
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; flex-shrink: 0;">
+                    <div id="contenedor-avatar" style="width: 100px; height: 100px; border-radius: 50%; background-color: #CBA4FF; color: #4A148C; display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: bold; margin-bottom: 16px; position: relative; cursor: pointer; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.1);">
+                        ${fotoPerfilUrl ? `<img src="${fotoPerfilUrl}" style="width:100%; height:100%; object-fit:cover;">` : iniciales}
+                        <div style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: white;">📷</div>
+                    </div>
+                    <input type="file" id="input-foto-perfil" accept="image/*" style="display: none;">
+                    
+                    <h2 style="color: white; margin: 0 0 4px 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">${window.miUsuario.nombre}</h2>
+                    <p style="color: #A0A0A0; margin: 0 0 16px 0; font-size: 14px;">${window.miUsuario.email}</p>
+                    <div style="background-color: #2B2A33; color: #E0E0E0; padding: 8px 16px; border-radius: 16px; font-size: 13px; font-weight: 500; border: 1px solid rgba(255,255,255,0.05);">
+                        ${congregacionTexto}
+                    </div>
+                </div>
 
-        <div style="border-top: 1px solid #3F3E47; width: 100%; margin-top: 10px;"></div>
+                <div style="display: flex; flex-direction: column; background: #25242C; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;">
+                    <div class="perfil-opcion" id="opc-editar-datos" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px;">✏️</span>
+                        <span style="color: white; font-size: 15px; font-weight: 500;">Editar mis datos</span>
+                    </div>
+                    <div class="perfil-opcion" id="opc-tema" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px;">⚙️</span>
+                        <span id="txt-tema-actual" style="color: white; font-size: 15px; font-weight: 500;">Tema: ${opcionesTemasTextos[temaActual]}</span>
+                    </div>
+                    <div class="perfil-opcion" id="opc-cambiar-cong" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px;">🔄</span>
+                        <span style="color: white; font-size: 15px; font-weight: 500;">Cambiar de congregación</span>
+                    </div>
+                    <div class="perfil-opcion" id="opc-reportar" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; background: rgba(203, 164, 255, 0.05); transition: background 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px; color: #CBA4FF;">💡</span>
+                        <span style="color: #CBA4FF; font-size: 15px; font-weight: bold;">Reportar problema o idea</span>
+                    </div>
+                    <div class="perfil-opcion" id="opc-cerrar-sesion" style="padding: 16px 20px; display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px; color: #E53935;">🚪</span>
+                        <span style="color: #E53935; font-size: 15px; font-weight: 500;">Cerrar sesión</span>
+                    </div>
+                </div>
 
-        <div style="display: flex; flex-direction: column; width: 100%;">
-            <div class="perfil-opcion" id="opc-editar-datos" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
-                <span style="color: white; margin-right: 16px; font-size: 20px;">✏️</span>
-                <span style="color: white; font-size: 16px;">Editar mis datos</span>
+                <div style="text-align: center; padding: 10px 20px 20px 20px; color: #777; font-size: 13px; margin-top: auto; flex-shrink: 0;">
+                    <div style="font-weight: bold; color: #CBA4FF; font-size: 14px; letter-spacing: 0.5px;">Mi Territorio Web</div>
+                    <div style="margin-top: 6px; font-weight: 500;">Versión instalada: ${WEB_VERSION}</div>
+                </div>
+                
             </div>
-            <div class="perfil-opcion" id="opc-tema" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
-                <span style="color: white; margin-right: 16px; font-size: 20px;">⚙️</span>
-                <span id="txt-tema-actual" style="color: white; font-size: 16px;">Tema: ${opcionesTemasTextos[temaActual]}</span>
-            </div>
-            <div class="perfil-opcion" id="opc-cambiar-cong" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
-                <span style="color: white; margin-right: 16px; font-size: 20px;">🔄</span>
-                <span style="color: white; font-size: 16px;">Cambiar de congregación</span>
-            </div>
-            <div class="perfil-opcion" id="opc-reportar" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
-                <span style="color: #CBA4FF; margin-right: 16px; font-size: 20px;">💡</span>
-                <span style="color: #CBA4FF; font-size: 16px;">Reportar problema o idea</span>
-            </div>
-            <div class="perfil-opcion" id="opc-cerrar-sesion" style="padding: 20px; border-bottom: 1px solid #3F3E47; display: flex; align-items: center; cursor: pointer;">
-                <span style="color: #E53935; margin-right: 16px; font-size: 20px;">🚪</span>
-                <span style="color: #E53935; font-size: 16px;">Cerrar sesión de Google</span>
-            </div>
-        </div>
-        
-        <div style="flex-grow: 1;"></div>
-        <div style="text-align: center; padding: 20px; color: #777; font-size: 13px;">
-            <div style="font-weight: bold; color: #CBA4FF; font-size: 14px;">Mi Territorio Web</div>
-            <div style="margin-top: 4px;">Versión instalada: ${WEB_VERSION}</div>
         </div>
     `;
 
     document.body.appendChild(modal);
 
-    // ==========================================
-    // LÓGICA DE LOS BOTONES
-    // ==========================================
+    const styleHover = document.createElement('style');
+    styleHover.innerHTML = `.perfil-opcion:hover { background: rgba(255,255,255,0.03) !important; } #btn-cerrar-perfil:hover { background: rgba(255,255,255,0.12) !important; }`;
+    modal.appendChild(styleHover);
+
+    function comprimirImagen(file, maxWithOrHeight = 700) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width; let height = img.height;
+                    if (width > height) { if (width > maxWithOrHeight) { height *= maxWithOrHeight / width; width = maxWithOrHeight; } } 
+                    else { if (height > maxWithOrHeight) { width *= maxWithOrHeight / height; height = maxWithOrHeight; } }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.75);
+                };
+            };
+        });
+    }
 
     document.getElementById('btn-cerrar-perfil').onclick = () => modal.remove();
 
-    // 1. Editar Datos
-    document.getElementById('opc-editar-datos').onclick = async () => {
+    const contenedorAvatar = document.getElementById('contenedor-avatar');
+    const inputFoto = document.getElementById('input-foto-perfil');
+    contenedorAvatar.onclick = () => inputFoto.click();
+    
+    inputFoto.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        contenedorAvatar.innerHTML = `<span style="font-size:13px; color:white; font-weight:bold;">Subiendo...</span>`;
+        try {
+            const blobComprimido = await comprimirImagen(file);
+            const storageRef = ref(storage, `usuarios/${window.miUsuario.email}/avatar.jpg`);
+            await uploadBytes(storageRef, blobComprimido);
+            const downloadUrl = await getDownloadURL(storageRef);
+            await setDoc(doc(db, "usuarios", window.miUsuario.email), { fotoPerfil: downloadUrl }, { merge: true });
+            contenedorAvatar.innerHTML = `<img src="${downloadUrl}" style="width:100%; height:100%; object-fit:cover;"><div style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: white;">📷</div>`;
+            const btnPrincipal = document.getElementById('btn-flotante-perfil');
+            if(btnPrincipal) btnPrincipal.innerHTML = `<img src="${downloadUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        } catch(err) {
+            alert("Error al subir: " + err.message); modal.remove(); mostrarPantallaPerfil();
+        }
+    };
+
+    document.getElementById('opc-editar-datos').onclick = () => {
         const partes = window.miUsuario.nombre.split(' ');
         const viejoNombre = partes[0] || '';
         const viejoApellido = partes.slice(1).join(' ') || '';
         
-        const nuevoNombre = prompt("Tu nombre:", viejoNombre);
-        if (nuevoNombre === null) return; 
-        const nuevoApellido = prompt("Tu apellido:", viejoApellido);
-        if (nuevoApellido === null) return;
-        
-        if (nuevoNombre.trim() === '') return alert("El nombre no puede estar vacío.");
-        
-        const nombreArmado = `${nuevoNombre.trim()} ${nuevoApellido.trim()}`.trim();
-        
-        try {
-            await setDoc(doc(db, "usuarios", window.miUsuario.email), {
-                nombre: nuevoNombre.trim(),
-                apellido: nuevoApellido.trim(),
-                nombreCompleto: nombreArmado
-            }, { merge: true });
-            
-            window.miUsuario.nombre = nombreArmado;
-            alert("¡Datos actualizados correctamente!");
-            modal.remove();
-            mostrarPantallaPerfil(); // Recargamos para ver los cambios
-        } catch (error) {
-            alert("Error al actualizar: " + error.message);
-        }
+        mostrarModalEditarDatos(viejoNombre, viejoApellido, async (nuevoNombre, nuevoApellido) => {
+            const nombreArmado = `${nuevoNombre.trim()} ${nuevoApellido.trim()}`.trim();
+            try {
+                await setDoc(doc(db, "usuarios", window.miUsuario.email), { nombre: nuevoNombre.trim(), apellido: nuevoApellido.trim(), nombreCompleto: nombreArmado }, { merge: true });
+                window.miUsuario.nombre = nombreArmado;
+                modal.remove(); mostrarPantallaPerfil();
+            } catch (error) { alert("Error al actualizar: " + error.message); }
+        });
     };
 
-    // 2. Cambiar Tema (Modo Noche/Día)
     document.getElementById('opc-tema').onclick = () => {
         const temas = ['system', 'light', 'dark'];
-        const actualIdx = temas.indexOf(temaActual);
-        const siguienteIdx = (actualIdx + 1) % temas.length;
-        temaActual = temas[siguienteIdx];
-        
+        temaActual = temas[(temas.indexOf(temaActual) + 1) % temas.length];
         localStorage.setItem('themePref', temaActual);
-        
         if (temaActual === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
         else if (temaActual === 'light') document.documentElement.setAttribute('data-theme', 'light');
         else document.documentElement.removeAttribute('data-theme');
-        
         document.getElementById('txt-tema-actual').innerText = `Tema: ${opcionesTemasTextos[temaActual]}`;
     };
 
-    // 3. Cambiar de Congregación
     document.getElementById('opc-cambiar-cong').onclick = () => {
-        if (confirm("¿Estás seguro de que deseas salir de tu congregación actual? Tendrás que solicitar acceso nuevamente si deseas volver.")) {
-            localStorage.removeItem('miCongregacionId');
-            location.reload();
-        }
+        mostrarModalConfirmacion("¿Cambiar de congregación?", "Si sales de tu congregación actual, tu rol se perderá y volverás a la sala de espera al unirte a una nueva. ¿Estás seguro?", "Sí, salir", "#E53935", () => {
+            localStorage.removeItem('miCongregacionId'); location.reload();
+        });
     };
 
-    // 4. Reportar problema o idea
-    document.getElementById('opc-reportar').onclick = async () => {
-        const mensaje = prompt("Describe el problema o la idea que tienes:");
-        if (!mensaje || !mensaje.trim()) return;
+    document.getElementById('opc-cerrar-sesion').onclick = () => {
+        mostrarModalConfirmacion("¿Cerrar sesión?", "¿Seguro que deseas cerrar tu sesión en este dispositivo?", "Cerrar sesión", "#E53935", async () => {
+            await signOut(auth); modal.remove(); location.reload();
+        });
+    };
+
+    document.getElementById('opc-reportar').onclick = () => abrirModalReporteAvanzado();
+}
+// ==========================================
+// MOTOR DE MODALES M3
+// ==========================================
+
+function mostrarModalEditarDatos(nombreActual, apellidoActual, onGuardar) {
+    let m = document.createElement('div');
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    
+    m.innerHTML = `
+        <div style="background: #25242C; width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08);">
+            <h3 style="color: white; margin: 0 0 20px 0; font-size: 20px; text-align: center;">Editar mis datos</h3>
+            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Nombre</label>
+            <input type="text" id="input-edit-nombre" value="${nombreActual}" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Apellido</label>
+            <input type="text" id="input-edit-apellido" value="${apellidoActual}" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 24px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button id="btn-cancelar-edit" style="background: transparent; border: none; color: #CBA4FF; font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
+                <button id="btn-guardar-edit" style="background: #CBA4FF; color: #4A148C; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m);
+    
+    document.getElementById('input-edit-nombre').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
+    document.getElementById('input-edit-nombre').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+    document.getElementById('input-edit-apellido').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
+    document.getElementById('input-edit-apellido').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+
+    document.getElementById('btn-cancelar-edit').onclick = () => m.remove();
+    document.getElementById('btn-guardar-edit').onclick = () => {
+        const nNombre = document.getElementById('input-edit-nombre').value.trim();
+        const nApellido = document.getElementById('input-edit-apellido').value.trim();
+        if(!nNombre) return alert("Por favor, ingresa al menos tu nombre.");
         
+        const btnGuardar = document.getElementById('btn-guardar-edit');
+        btnGuardar.innerText = "Guardando..."; btnGuardar.disabled = true;
+        onGuardar(nNombre, nApellido); m.remove();
+    };
+}
+
+function mostrarModalConfirmacion(titulo, mensaje, txtConfirmar, colorConfirmar, onConfirm) {
+    let m = document.createElement('div');
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    
+    m.innerHTML = `
+        <div style="background: #25242C; width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08); text-align: center;">
+            <div style="font-size: 36px; margin-bottom: 16px; animation: latido 2s infinite;">⚠️</div>
+            <h3 style="color: white; margin: 0 0 12px 0; font-size: 20px;">${titulo}</h3>
+            <p style="color: #A0A0A0; font-size: 14px; margin: 0 0 28px 0; line-height: 1.5;">${mensaje}</p>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button id="btn-accion-confirm" style="background: ${colorConfirmar}; color: white; border: none; font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px; box-shadow: 0 4px 12px rgba(229, 57, 53, 0.2);">${txtConfirmar}</button>
+                <button id="btn-cancelar-confirm" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: white; font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m);
+    
+    document.getElementById('btn-cancelar-confirm').onclick = () => m.remove();
+    document.getElementById('btn-accion-confirm').onclick = () => { m.remove(); onConfirm(); };
+}
+
+// 🔥 EL NUEVO MODAL PARA CREAR CONGREGACIÓN 🔥
+function mostrarModalCrearCongregacion(onCrear) {
+    let m = document.createElement('div');
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    
+    m.innerHTML = `
+        <div style="background: #25242C; width: 100%; max-width: 340px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08);">
+            <div style="font-size: 32px; text-align: center; margin-bottom: 12px;">🏛️</div>
+            <h3 style="color: white; margin: 0 0 20px 0; font-size: 20px; text-align: center;">Crear Congregación</h3>
+            
+            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Número Oficial</label>
+            <input type="number" id="input-crear-numero" placeholder="Ej: 1552" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            
+            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Nombre de la Congregación</label>
+            <input type="text" id="input-crear-nombre" placeholder="Ej: Mendoza" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 20px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            
+            <p id="error-crear-cong" style="color: #E53935; font-size: 13px; margin: 0 0 16px 0; display: none; text-align: center; font-weight: bold;"></p>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button id="btn-cancelar-crear" style="background: transparent; border: none; color: #CBA4FF; font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
+                <button id="btn-guardar-crear" style="background: #CBA4FF; color: #4A148C; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Crear</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(m);
+    
+    document.getElementById('input-crear-numero').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
+    document.getElementById('input-crear-numero').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+    document.getElementById('input-crear-nombre').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
+    document.getElementById('input-crear-nombre').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+
+    const lblError = document.getElementById('error-crear-cong');
+
+    document.getElementById('btn-cancelar-crear').onclick = () => m.remove();
+    document.getElementById('btn-guardar-crear').onclick = () => {
+        const numero = document.getElementById('input-crear-numero').value.trim();
+        const nombre = document.getElementById('input-crear-nombre').value.trim();
+        lblError.style.display = 'none';
+
+        if (!numero || !/^\d+$/.test(numero)) { lblError.innerText = "Error: Ingresa un número válido."; lblError.style.display = 'block'; return; }
+        if (!nombre) { lblError.innerText = "Error: El nombre es obligatorio."; lblError.style.display = 'block'; return; }
+        
+        const btnGuardar = document.getElementById('btn-guardar-crear');
+        btnGuardar.innerText = "Creando..."; btnGuardar.disabled = true;
+        
+        onCrear(numero, nombre, m);
+    };
+}
+
+
+// ==========================================
+// RESTO DEL CÓDIGO INTACTO
+// ==========================================
+
+function abrirModalReporteAvanzado() {
+    let modal = document.getElementById('modal-reporte-pro');
+    if (modal) modal.remove();
+
+    let archivoAdjunto = null;
+    let tipoArchivo = "";
+
+    modal = document.createElement('div');
+    modal.id = 'modal-reporte-pro';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1E1D24; z-index: 10000; display: flex; flex-direction: column; font-family: sans-serif;';
+    
+    modal.innerHTML = `
+        <div style="padding: 16px; display: flex; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <button id="btn-cerrar-reporte" style="background: none; border: none; color: white; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                ✕ <span style="font-size: 18px;">Reportar Idea o Problema</span>
+            </button>
+        </div>
+        
+        <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+            <h3 style="color: #CBA4FF; margin: 0 0 8px 0; font-size: 18px;">¡Tu opinión nos ayuda a mejorar!</h3>
+            <p style="color: #A0A0A0; font-size: 14px; margin: 0 0 20px 0; line-height: 1.4;">Cuéntanos qué problema tuviste o qué idea genial se te ocurrió. Puedes adjuntar fotos o grabar un audio.</p>
+            
+            <textarea id="txt-reporte-detalle" placeholder="Escribe aquí todos los detalles..." style="width: 100%; height: 150px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 16px; color: white; font-size: 15px; resize: none; outline: none; margin-bottom: 20px; box-sizing: border-box;"></textarea>
+            
+            <div id="preview-adjunto" style="display: none; align-items: center; gap: 10px; background: rgba(203, 164, 255, 0.1); padding: 12px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(203, 164, 255, 0.3);">
+                <span id="icono-adjunto" style="font-size: 24px;">📄</span>
+                <span id="nombre-adjunto" style="color: white; font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Archivo.jpg</span>
+                <button id="btn-quitar-adjunto" style="background: none; border: none; color: #E53935; font-size: 18px; cursor: pointer;">✕</button>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button id="btn-adjuntar" style="flex: 1; background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 12px; padding: 14px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+                    📎 Adjuntar
+                </button>
+                <input type="file" id="input-archivo-reporte" accept="image/*,video/*,.pdf" style="display: none;">
+                
+                <button id="btn-microfono" style="width: 56px; height: 52px; background: #CBA4FF; border: none; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                    🎤
+                </button>
+                <input type="file" id="input-audio-reporte" accept="audio/*" capture="microphone" style="display: none;">
+            </div>
+
+            <div style="flex: 1;"></div>
+
+            <button id="btn-enviar-reporte" style="width: 100%; background: #CBA4FF; color: #4A148C; border: none; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(203, 164, 255, 0.2); margin-top: 20px;">
+                Enviar Reporte
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('btn-cerrar-reporte').onclick = () => modal.remove();
+    
+    const divPreview = document.getElementById('preview-adjunto');
+    const txtNombre = document.getElementById('nombre-adjunto');
+    const iconoAdjunto = document.getElementById('icono-adjunto');
+
+    function mostrarPreview(file, icon) {
+        archivoAdjunto = file; iconoAdjunto.innerText = icon;
+        txtNombre.innerText = file.name || "Grabación de audio";
+        divPreview.style.display = 'flex';
+    }
+
+    document.getElementById('btn-quitar-adjunto').onclick = () => {
+        archivoAdjunto = null; divPreview.style.display = 'none';
+        document.getElementById('input-archivo-reporte').value = '';
+        document.getElementById('input-audio-reporte').value = '';
+    };
+
+    document.getElementById('btn-adjuntar').onclick = () => document.getElementById('input-archivo-reporte').click();
+    document.getElementById('input-archivo-reporte').onchange = (e) => {
+        if(e.target.files[0]) { tipoArchivo = "imagen_documento"; mostrarPreview(e.target.files[0], '📎'); }
+    };
+
+    document.getElementById('btn-microfono').onclick = () => document.getElementById('input-audio-reporte').click();
+    document.getElementById('input-audio-reporte').onchange = (e) => {
+        if(e.target.files[0]) { tipoArchivo = "audio"; mostrarPreview(e.target.files[0], '🎵'); }
+    };
+
+    document.getElementById('btn-enviar-reporte').onclick = async () => {
+        const texto = document.getElementById('txt-reporte-detalle').value.trim();
+        if (!texto && !archivoAdjunto) return alert("Por favor, escribe un detalle o adjunta un archivo.");
+
+        const btnEnviar = document.getElementById('btn-enviar-reporte');
+        btnEnviar.innerText = "Enviando..."; btnEnviar.disabled = true;
+
         try {
-            const nuevoId = Date.now().toString();
-            await setDoc(doc(db, "reportes_ideas", nuevoId), {
-                email: window.miUsuario.email,
-                nombre: window.miUsuario.nombre,
-                mensaje: mensaje.trim(),
-                fecha: Date.now(),
-                congregacionId: window.miUsuario.congregacionId || "Ninguna"
+            let fileUrl = "";
+            if (archivoAdjunto) {
+                const extension = archivoAdjunto.name ? archivoAdjunto.name.split('.').pop() : (tipoArchivo === 'audio' ? 'm4a' : 'jpg');
+                const storageRef = ref(getStorage(), `reportes/${window.miUsuario.email}_${Date.now()}.${extension}`);
+                await uploadBytes(storageRef, archivoAdjunto);
+                fileUrl = await getDownloadURL(storageRef);
+            }
+
+            await setDoc(doc(db, "reportes_ideas", Date.now().toString()), {
+                email: window.miUsuario.email, nombre: window.miUsuario.nombre,
+                mensaje: texto, adjunto: fileUrl, tipoAdjunto: tipoArchivo,
+                fecha: Date.now(), congregacionId: window.miUsuario.congregacionId || "Ninguna"
             });
-            alert("¡Gracias! Tu mensaje fue enviado con éxito y los desarrolladores lo revisarán pronto.");
+
+            alert("¡Sugerencia enviada! El equipo la revisará pronto.");
+            modal.remove();
         } catch (e) {
             alert("Error al enviar el reporte: " + e.message);
-        }
-    };
-
-    // 5. Cerrar Sesión
-    document.getElementById('opc-cerrar-sesion').onclick = async () => {
-        if (confirm("¿Seguro que deseas cerrar sesión en este dispositivo?")) {
-            await signOut(auth);
-            modal.remove();
-            location.reload();
+            btnEnviar.innerText = "Enviar Reporte"; btnEnviar.disabled = false;
         }
     };
 }
@@ -436,17 +666,24 @@ function mostrarBuscadorCongregaciones(email, nombreCompleto) {
         }
     };
 
+    // 🔥 ACÁ CONECTAMOS EL NUEVO MODAL DE CREAR CONGREGACIÓN 🔥
     btnAbrirCrear.onclick = () => {
-        const numero = prompt("Ingresa el Número Oficial:");
-        if (!numero || !/^\d+$/.test(numero)) return alert("Número inválido.");
-        const nombre = prompt("Ingresa el Nombre:");
-        if (!nombre || !nombre.trim()) return alert("Nombre obligatorio.");
-
-        const docRef = doc(db, "congregaciones", numero.trim());
-        setDoc(docRef, { nombre: nombre.trim(), roles: { [email]: "siervo" } }, { merge: true }).then(() => {
-            localStorage.setItem('miCongregacionId', numero.trim());
-            activarVigilanteRealtime(email, numero.trim(), nombreCompleto);
-        }).catch(err => alert(err.message));
+        mostrarModalCrearCongregacion((numero, nombre, modalReference) => {
+            const docRef = doc(db, "congregaciones", numero);
+            setDoc(docRef, { nombre: nombre, roles: { [email]: "siervo" } }, { merge: true }).then(() => {
+                localStorage.setItem('miCongregacionId', numero);
+                modalReference.remove();
+                activarVigilanteRealtime(email, numero, nombreCompleto);
+            }).catch(err => {
+                const lblError = document.getElementById('error-crear-cong');
+                if (lblError) {
+                    lblError.innerText = "Error de conexión: " + err.message;
+                    lblError.style.display = 'block';
+                }
+                const btnGuardar = document.getElementById('btn-guardar-crear');
+                btnGuardar.innerText = "Crear"; btnGuardar.disabled = false;
+            });
+        });
     };
 }
 
@@ -514,15 +751,24 @@ function mostrarPantallaSalaEspera(congId, congNombre, email, nombreCompleto) {
             <p style="color: #6200EE; font-size: 14px; font-weight: bold; line-height: 1.5; margin-bottom: 30px;">
                 Espera que el Siervo de Territorios apruebe tu cuenta. Esta pantalla se actualizará de forma automática.
             </p>
-            <button id="btn-cancelar-solicitud" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; background: transparent; color: #555; font-weight: bold; cursor: pointer;">Cancelar solicitud</button>
+            <button id="btn-cancelar-solicitud" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; background: transparent; color: #555; font-weight: bold; cursor: pointer; transition: background 0.2s;">Cancelar solicitud</button>
         </div>
     `;
 
     document.getElementById('btn-cancelar-solicitud').onclick = () => {
-        if (confirm("¿Quieres cancelar la solicitud?")) {
-            if (window.unsubVigilanteRole) { window.unsubVigilanteRole(); window.unsubVigilanteRole = null; }
-            localStorage.removeItem('miCongregacionId'); contenedor.remove(); location.reload();
-        }
+        mostrarModalConfirmacion(
+            "¿Cancelar solicitud?", 
+            "¿Seguro que deseas cancelar tu ingreso a esta congregación? Se cerrará tu sesión para que puedas ingresar con otra cuenta si lo deseas.", 
+            "Sí, cancelar y salir", 
+            "#E53935", 
+            async () => {
+                if (window.unsubVigilanteRole) { window.unsubVigilanteRole(); window.unsubVigilanteRole = null; }
+                localStorage.removeItem('miCongregacionId'); 
+                await signOut(auth); 
+                contenedor.remove(); 
+                location.reload(); 
+            }
+        );
     };
 }
 

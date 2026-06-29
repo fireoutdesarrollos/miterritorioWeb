@@ -1,3 +1,6 @@
+// ==========================================
+// ARCHIVO: map-service.js (VERSIÓN INTEGRAL Y COMPLETADA)
+// ==========================================
 import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 
@@ -97,7 +100,6 @@ function configurarAutocomplete(inputId, listId, opciones) {
         
         const filtrados = opciones.filter(opc => {
             const opcNorm = normalizarTexto(opc);
-            // Verifica que TODAS las palabras escritas estén en la opción (no importa el orden)
             return queryWords.every(word => opcNorm.includes(word));
         });
         
@@ -138,7 +140,6 @@ async function cargarListasMinisterio() {
 }
 
 export async function inicializarMapaYVisitas() {
-    // 0. Cargar listas y activar la búsqueda inteligente
     cargarListasMinisterio();
 
     const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
@@ -468,6 +469,15 @@ function abrirFichaVisita(visita) {
 
     window.listaNotasActuales = parsearNotasHistorial(visita.notas || "");
 
+    // 🔥 ACÁ LE DAMOS VIDA AL BOTÓN DEL GPS 🔥
+    const btnGps = document.getElementById('btn-ir-gps');
+    if (btnGps) {
+        btnGps.onclick = (e) => {
+            e.preventDefault();
+            abrirNavegadorGPS(visita.latitud, visita.longitud); 
+        };
+    }
+
     function renderizarHistorial() {
         const container = document.getElementById('historial-conversaciones-container');
         container.innerHTML = '';
@@ -480,23 +490,62 @@ function abrirFichaVisita(visita) {
         window.listaNotasActuales.forEach(nota => {
             const card = document.createElement('div');
             card.className = 'chat-bubble';
+            card.style.position = 'relative';
+
             card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 8px;">
                     <div class="chat-meta">${nota.fecha}</div>
-                    <span style="color:var(--error-text); cursor:pointer; font-size:14px; font-weight:bold; padding: 0 5px;" class="btn-borrar-nota">✕</span>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-editar-nota" style="background: rgba(203, 164, 255, 0.1); border: none; color: var(--primary-color, #CBA4FF); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; font-size: 13px;">
+                            ✏️
+                        </button>
+                        <button class="btn-borrar-nota" style="background: rgba(229, 57, 53, 0.1); border: none; color: var(--error-text, #E53935); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; font-size: 13px;">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
-                <div class="chat-text">${nota.texto}</div>
+                <div class="chat-text" style="line-height: 1.4;">${nota.texto}</div>
             `;
             
+            // ==========================================
+            // LÓGICA ELIMINAR NOTA (Con Modal M3)
+            // ==========================================
             card.querySelector('.btn-borrar-nota').onclick = () => {
-                if(confirm("¿Seguro que deseas eliminar esta conversación del historial?")) {
-                    window.listaNotasActuales = window.listaNotasActuales.filter(n => n.id !== nota.id);
-                    renderizarHistorial();
+                mostrarModalConfirmacionNota(
+                    "¿Eliminar conversación?", 
+                    "Esta acción no se puede deshacer y borrará la nota del historial.", 
+                    "Sí, eliminar", 
+                    "#E53935", 
+                    () => {
+                        window.listaNotasActuales = window.listaNotasActuales.filter(n => n.id !== nota.id);
+                        renderizarHistorial(); 
+                        
+                        const visitaActualizada = { notas: empaquetarNotasHistorial(window.listaNotasActuales) };
+                        setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", visita.id), visitaActualizada, { merge: true });
+                    }
+                );
+            };
+
+            // ==========================================
+            // LÓGICA EDITAR NOTA (Con Modal M3)
+            // ==========================================
+            card.querySelector('.btn-editar-nota').onclick = () => {
+                mostrarModalEditarNota(nota.texto, (nuevoTexto) => {
+                    if (nuevoTexto === nota.texto) return; 
+                    
+                    window.listaNotasActuales = window.listaNotasActuales.map(n => {
+                        if (n.id === nota.id) return { ...n, texto: nuevoTexto };
+                        return n;
+                    });
+                    
+                    renderizarHistorial(); 
                     
                     const visitaActualizada = { notas: empaquetarNotasHistorial(window.listaNotasActuales) };
                     setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", visita.id), visitaActualizada, { merge: true });
-                }
+                });
             };
+
             container.appendChild(card);
         });
     }
@@ -504,4 +553,117 @@ function abrirFichaVisita(visita) {
     renderizarHistorial();
 
     if (gn('ficha-modal')) gn('ficha-modal').style.display = 'flex';
+}
+
+// ========================================================
+// MOTORES DE MODALES EXCLUSIVOS PARA LAS NOTAS
+// ========================================================
+function mostrarModalEditarNota(textoActual, onGuardar) {
+    let m = document.createElement('div');
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    
+    m.innerHTML = `
+        <div style="background: var(--surface-color, #25242C); width: 100%; max-width: 360px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08);">
+            <h3 style="color: var(--text-color, white); margin: 0 0 16px 0; font-size: 18px;">Editar Conversación</h3>
+            <textarea id="input-edit-nota" style="width: 100%; height: 140px; background: var(--bg-color, #1E1D24); border: 1px solid rgba(255,255,255,0.1); color: var(--text-color, white); padding: 14px; border-radius: 12px; margin-bottom: 24px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; resize: none;">${textoActual}</textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button id="btn-cancelar-edit-nota" style="background: transparent; border: none; color: var(--primary-color, #CBA4FF); font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
+                <button id="btn-guardar-edit-nota" style="background: var(--primary-color, #CBA4FF); color: #4A148C; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m);
+    
+    const inputNota = document.getElementById('input-edit-nota');
+    inputNota.addEventListener('focus', (e) => e.target.style.borderColor = 'var(--primary-color, #CBA4FF)');
+    inputNota.addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+
+    document.getElementById('btn-cancelar-edit-nota').onclick = () => m.remove();
+    document.getElementById('btn-guardar-edit-nota').onclick = () => {
+        const nTexto = inputNota.value.trim();
+        if(!nTexto) return alert("La nota no puede quedar vacía.");
+        const btnGuardar = document.getElementById('btn-guardar-edit-nota');
+        btnGuardar.innerText = "Guardando..."; btnGuardar.disabled = true;
+        onGuardar(nTexto); m.remove();
+    };
+}
+
+function mostrarModalConfirmacionNota(titulo, mensaje, txtConfirmar, colorConfirmar, onConfirm) {
+    let m = document.createElement('div');
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    
+    m.innerHTML = `
+        <div style="background: var(--surface-color, #25242C); width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08); text-align: center;">
+            <div style="font-size: 36px; margin-bottom: 16px;">⚠️</div>
+            <h3 style="color: var(--text-color, white); margin: 0 0 12px 0; font-size: 18px;">${titulo}</h3>
+            <p style="color: var(--text-muted, #A0A0A0); font-size: 14px; margin: 0 0 28px 0; line-height: 1.5;">${mensaje}</p>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button id="btn-accion-confirm-nota" style="background: ${colorConfirmar}; color: white; border: none; font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px;">${txtConfirmar}</button>
+                <button id="btn-cancelar-confirm-nota" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: var(--text-color, white); font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m);
+    document.getElementById('btn-cancelar-confirm-nota').onclick = () => m.remove();
+    document.getElementById('btn-accion-confirm-nota').onclick = () => { m.remove(); onConfirm(); };
+}
+
+// ========================================================
+// MOTOR DE NAVEGACIÓN GPS (ESTILO BOTTOM SHEET M3)
+// ========================================================
+function abrirNavegadorGPS(lat, lng) {
+    if (!lat || !lng) return alert("No se encontraron las coordenadas exactas de esta visita. Asegúrate de haber tocado el mapa.");
+
+    let m = document.createElement('div');
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10020; display: flex; align-items: flex-end; justify-content: center; font-family: sans-serif;';
+    
+    m.innerHTML = `
+        <div style="background: var(--surface-color, #25242C); width: 100%; max-width: 480px; border-radius: 28px 28px 0 0; padding: 24px 24px 36px 24px; box-shadow: 0 -8px 40px rgba(0,0,0,0.6); border-top: 1px solid rgba(255,255,255,0.08); animation: slideUpNav 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);">
+            <div style="width: 40px; height: 5px; background: rgba(255,255,255,0.2); border-radius: 3px; margin: 0 auto 24px auto;"></div>
+            <h3 style="color: var(--text-color, white); margin: 0 0 20px 0; font-size: 20px; text-align: center;">¿Cómo quieres llegar?</h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button id="btn-nav-maps" style="background: var(--bg-color, #1E1D24); border: 1px solid rgba(255,255,255,0.08); color: var(--text-color, white); padding: 16px; border-radius: 16px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 16px; transition: background 0.2s;">
+                    <span style="font-size: 24px;">🗺️</span> Google Maps
+                </button>
+                <button id="btn-nav-waze" style="background: var(--bg-color, #1E1D24); border: 1px solid rgba(255,255,255,0.08); color: var(--text-color, white); padding: 16px; border-radius: 16px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 16px; transition: background 0.2s;">
+                    <span style="font-size: 24px;">🚗</span> Waze
+                </button>
+                <button id="btn-nav-apple" style="background: var(--bg-color, #1E1D24); border: 1px solid rgba(255,255,255,0.08); color: var(--text-color, white); padding: 16px; border-radius: 16px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 16px; transition: background 0.2s;">
+                    <span style="font-size: 24px;">🍎</span> Apple Maps
+                </button>
+            </div>
+            <button id="btn-cancelar-nav" style="width: 100%; background: transparent; border: none; color: var(--text-muted, #A0A0A0); font-weight: bold; font-size: 16px; padding: 20px 16px 0 16px; margin-top: 8px; cursor: pointer;">Cancelar</button>
+        </div>
+    `;
+    
+    if (!document.getElementById('anim-slide-up-nav')) {
+        const style = document.createElement('style');
+        style.id = 'anim-slide-up-nav';
+        style.innerHTML = `@keyframes slideUpNav { from { transform: translateY(100%); } to { transform: translateY(0); } }`;
+        document.head.appendChild(style);
+    }
+
+    document.body.appendChild(m);
+
+    const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isApple) document.getElementById('btn-nav-apple').style.display = 'none';
+
+    document.getElementById('btn-cancelar-nav').onclick = () => m.remove();
+    
+document.getElementById('btn-nav-maps').onclick = () => {
+        // Enlace oficial optimizado para activar la app de Google Maps en Android
+        window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+        m.remove();
+    };
+
+    document.getElementById('btn-nav-waze').onclick = () => {
+        window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+        m.remove();
+    };
+
+    document.getElementById('btn-nav-apple').onclick = () => {
+        window.open(`http://maps.apple.com/?daddr=${lat},${lng}`, '_blank');
+        m.remove();
+    };
 }
