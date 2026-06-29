@@ -469,6 +469,107 @@ function abrirFichaVisita(visita) {
 
     window.listaNotasActuales = parsearNotasHistorial(visita.notas || "");
 
+    // 🔥 ACÁ LE DAMOS VIDA AL BOTÓN DEL GPS (FORZADO DESDE JS PARA VENCER LA CACHÉ) 🔥
+    const btnGps = document.getElementById('btn-ir-gps');
+    if (btnGps) {
+        // Machacamos el estilo viejo inyectando el CSS directamente en el elemento
+        btnGps.style.cssText = "background-color: #d8bcff !important; border: none !important; border-radius: 16px !important; width: 54px !important; height: 54px !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important; transition: transform 0.15s ease !important; flex-shrink: 0 !important; margin-bottom: 15px !important;";
+        
+        // Le inyectamos el ícono oficial de navegación de Android (Rombo con flecha)
+        btnGps.innerHTML = `<svg viewBox="0 0 24 24" fill="#311B92" width="28px" height="28px" style="pointer-events: none;"><path d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.38.39-1.01 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/></svg>`;
+        
+        // Efecto físico de hundimiento
+        btnGps.onmousedown = () => btnGps.style.transform = 'scale(0.92)';
+        btnGps.onmouseup = () => btnGps.style.transform = 'scale(1)';
+        btnGps.onmouseleave = () => btnGps.style.transform = 'scale(1)';
+
+        // La acción de abrir el navegador
+        btnGps.onclick = (e) => {
+            e.preventDefault();
+            abrirNavegadorGPS(visita.latitud, visita.longitud); 
+        };
+    }
+
+    function renderizarHistorial() {
+        const container = document.getElementById('historial-conversaciones-container');
+        container.innerHTML = '';
+        
+        if (window.listaNotasActuales.length === 0) {
+            container.innerHTML = `<p style="color: var(--text-muted); font-size: 14px;">No hay conversaciones previas registradas.</p>`;
+            return;
+        }
+
+        window.listaNotasActuales.forEach(nota => {
+            const card = document.createElement('div');
+            card.className = 'chat-bubble';
+            card.style.position = 'relative';
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 8px;">
+                    <div class="chat-meta">${nota.fecha}</div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-editar-nota" style="background: rgba(203, 164, 255, 0.1); border: none; color: var(--primary-color, #CBA4FF); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; font-size: 13px;">
+                            ✏️
+                        </button>
+                        <button class="btn-borrar-nota" style="background: rgba(229, 57, 53, 0.1); border: none; color: var(--error-text, #E53935); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; font-size: 13px;">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                <div class="chat-text" style="line-height: 1.4;">${nota.texto}</div>
+            `;
+            
+            // ==========================================
+            // LÓGICA ELIMINAR NOTA (Con Modal M3)
+            // ==========================================
+            card.querySelector('.btn-borrar-nota').onclick = () => {
+                mostrarModalConfirmacionNota(
+                    "¿Eliminar conversación?", 
+                    "Esta acción no se puede deshacer y borrará la nota del historial.", 
+                    "Sí, eliminar", 
+                    "#E53935", 
+                    () => {
+                        window.listaNotasActuales = window.listaNotasActuales.filter(n => n.id !== nota.id);
+                        renderizarHistorial(); 
+                        
+                        const visitaActualizada = { notas: empaquetarNotasHistorial(window.listaNotasActuales) };
+                        setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", visita.id), visitaActualizada, { merge: true });
+                    }
+                );
+            };
+
+            // ==========================================
+            // LÓGICA EDITAR NOTA (Con Modal M3)
+            // ==========================================
+            card.querySelector('.btn-editar-nota').onclick = () => {
+                mostrarModalEditarNota(nota.texto, (nuevoTexto) => {
+                    if (nuevoTexto === nota.texto) return; 
+                    
+                    window.listaNotasActuales = window.listaNotasActuales.map(n => {
+                        if (n.id === nota.id) return { ...n, texto: nuevoTexto };
+                        return n;
+                    });
+                    
+                    renderizarHistorial(); 
+                    
+                    const visitaActualizada = { notas: empaquetarNotasHistorial(window.listaNotasActuales) };
+                    setDoc(doc(db, "usuarios", window.miUsuario.email, "mis_visitas", visita.id), visitaActualizada, { merge: true });
+                });
+            };
+
+            container.appendChild(card);
+        });
+    }
+    
+    renderizarHistorial();
+
+    if (gn('ficha-modal')) gn('ficha-modal').style.display = 'flex';
+}
+
+
+    window.listaNotasActuales = parsearNotasHistorial(visita.notas || "");
+
     // 🔥 ACÁ LE DAMOS VIDA AL BOTÓN DEL GPS 🔥
     const btnGps = document.getElementById('btn-ir-gps');
     if (btnGps) {
