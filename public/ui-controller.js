@@ -1,3 +1,7 @@
+// ==========================================
+// ARCHIVO: ui-controller.js (CANDADO DE PRIVACIDAD)
+// ==========================================
+
 export function iniciarControladorUI() {
     // 1. Manejo de Pestañas (Tabs)
     const tabs = document.querySelectorAll('.tab');
@@ -19,45 +23,28 @@ export function iniciarControladorUI() {
         });
     });
 
-    // 2. Cerrar Modales
+    // 2. Cerrar Modales básicos
     const btnCerrarFicha = document.getElementById('btn-cerrar-ficha');
     if (btnCerrarFicha) btnCerrarFicha.onclick = () => history.back();
+}
 
-    // 3. Intercepción del Botón "Atrás" de Android
-    window.addEventListener('popstate', () => {
-        const modalFicha = document.getElementById('ficha-modal');
-        const modalAsignar = document.getElementById('asignar-modal');
-        const barraInventario = document.getElementById('barra-accion-inventario');
-        const adminDashboard = document.getElementById('admin-dashboard');
-        const viewsAdmin = ['admin-inventario-view', 'admin-reportes-view', 'admin-roles-view'];
+// 🔥 EL CANDADO DEFINITIVO DE PRIVACIDAD 🔥
+export function aplicarCandadoPrivacidad(rol) {
+    const tabServicio = document.querySelector('.tab[data-target="servicio-view"]');
+    
+    if (!tabServicio) return;
+
+    // Solo la alta gerencia puede ver la pestaña
+    if (rol === 'siervo' || rol === 'ayudante') {
+        tabServicio.style.display = 'flex'; // o 'block', dependiendo de tu flexbox
+    } else {
+        // Publicadores, invitados y CONDUCTORES rebotan acá
+        tabServicio.style.display = 'none';
         
-        // Cierra modales
-        if (modalFicha && modalFicha.style.display === 'flex') { modalFicha.style.display = 'none'; return; }
-        if (modalAsignar && modalAsignar.style.display === 'flex') { modalAsignar.style.display = 'none'; return; }
-
-        // Cierra sub-menús de admin
-        let cerroAdmin = false;
-        viewsAdmin.forEach(id => {
-            const el = document.getElementById(id);
-            if (el && el.style.display === 'block') {
-                el.style.display = 'none';
-                cerroAdmin = true;
-            }
-        });
-        
-        if (cerroAdmin) {
-            if(barraInventario) barraInventario.style.display = 'none';
-            if(adminDashboard) adminDashboard.style.display = 'flex';
-            return;
+        // Medida de seguridad extra: si un conductor estaba en la pestaña, lo pateamos al mapa
+        if (tabServicio.classList.contains('active')) {
+            const tabMapa = document.querySelector('.tab[data-target="map-view"]');
+            if (tabMapa) tabMapa.click();
         }
-
-        // Vuelve al mapa si estás en otra pestaña
-        const tabMapa = document.querySelector('.tab[data-target="map-view"]');
-        if (tabMapa && !tabMapa.classList.contains('active')) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); 
-            document.querySelectorAll('.view-section').forEach(v => v.style.display = 'none');
-            tabMapa.classList.add('active'); 
-            document.getElementById('map-view').style.display = 'flex';
-        }
-    });
+    }
 }

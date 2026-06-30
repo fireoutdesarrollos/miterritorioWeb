@@ -1,37 +1,47 @@
 // ==========================================
-// ARCHIVO: auth-service.js (VERSIÓN v1.7.0 - CREAR CONG. NATIVO M3)
+// ARCHIVO: auth-service.js (VERSIÓN CON DELEGACIÓN DE EVENTOS Y POPUP)
 // ==========================================
-import { signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { doc, getDoc, collection, getDocs, updateDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 import { auth, provider, db } from "./firebase-core.js";
 import { inicializarMapaYVisitas } from "./map-service.js";
 import { configurarPanelAdmin } from "./admin-service.js";
+import { aplicarCandadoPrivacidad } from "./ui-controller.js";
 
-// 👇 CONTROL DE CACHÉ ACTIVO 👇
-const WEB_VERSION = "v1.7.6"; 
+const WEB_VERSION = "v1.7.9"; 
 
 aplicarTemaInicial();
 
 export function iniciarAutenticacion() {
     const loginSection = document.getElementById('login-section');
     const dashboardSection = document.getElementById('dashboard-section');
-    const btnLogin = document.getElementById('btn-login');
 
-    if (btnLogin) {
-        btnLogin.addEventListener('click', async () => {
+    // 🔥 DELEGACIÓN DE EVENTOS: Atrapa el clic sin importar cuándo cargó el botón
+    document.addEventListener('click', async (e) => {
+        const btnLogin = e.target.closest('#btn-login');
+        
+        if (btnLogin) {
+            e.preventDefault();
+            console.log("🟢 [LOGIN] Botón presionado. Iniciando Popup...");
             btnLogin.innerText = "Conectando con Google...";
+            
             try {
-                // CAMBIO: signInWithRedirect en lugar de signInWithPopup
-                await signInWithRedirect(auth, provider); 
+                await signInWithPopup(auth, provider); 
+                console.log("🟢 [LOGIN] Popup ejecutado con éxito.");
             } catch (error) {
+                console.error("🔴 [LOGIN] Error:", error);
                 btnLogin.innerText = "Error. Intentar de nuevo";
+                if (error.code !== 'auth/popup-closed-by-user') {
+                    alert("Error al iniciar sesión: " + error.message);
+                }
             }
-        });
-    }
+        }
+    });
 
     onAuthStateChanged(auth, async (user) => {
         if (user) {
+            console.log("🟢 [AUTH] Usuario detectado:", user.email);
             if (loginSection) loginSection.style.display = 'none';
             if (dashboardSection) dashboardSection.style.display = 'block';
 
@@ -46,8 +56,11 @@ export function iniciarAutenticacion() {
             }
 
         } else {
+            console.log("🟡 [AUTH] No hay sesión activa.");
             if (loginSection) loginSection.style.display = 'flex'; 
             if (dashboardSection) dashboardSection.style.display = 'none';
+            
+            const btnLogin = document.getElementById('btn-login');
             if (btnLogin) btnLogin.innerText = "Iniciar sesión con Google";
             
             document.getElementById('contenedor-onboarding')?.remove();
@@ -72,23 +85,23 @@ function mostrarPantallaOnboarding(email, googleName) {
     if (!contenedor) {
         contenedor = document.createElement('div');
         contenedor.id = 'contenedor-onboarding';
-        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color, #f5f5f5); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
         document.body.appendChild(contenedor);
     }
 
     contenedor.innerHTML = `
-        <div style="background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box;">
-            <h3 style="margin: 0 0 8px 0; color: #333; font-size: 22px; text-align: center;">¡Bienvenido a Mi Territorio!</h3>
-            <p style="color: #666; margin-bottom: 24px; font-size: 14px; text-align: center;">Para empezar, dinos cómo te llamas:</p>
+        <div style="background: var(--surface-color, white); padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box; border: 1px solid var(--border-color, #eee);">
+            <h3 style="margin: 0 0 8px 0; color: var(--text-color, #333); font-size: 22px; text-align: center;">¡Bienvenido a Mi Territorio!</h3>
+            <p style="color: var(--text-muted, #666); margin-bottom: 24px; font-size: 14px; text-align: center;">Para empezar, dinos cómo te llamas:</p>
             
             <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: gray; font-weight: bold; margin-bottom: 6px;">Nombre</label>
-                <input type="text" id="onboarding-nombre" value="${preNombre}" placeholder="Ej: Juan" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 15px; outline: none;">
+                <label style="display: block; font-size: 13px; color: var(--text-muted, gray); font-weight: bold; margin-bottom: 6px;">Nombre</label>
+                <input type="text" id="onboarding-nombre" value="${preNombre}" placeholder="Ej: Juan" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #ccc); background: var(--bg-color, transparent); color: var(--text-color, #333); box-sizing: border-box; font-size: 15px; outline: none;">
             </div>
             
             <div style="margin-bottom: 25px;">
-                <label style="display: block; font-size: 13px; color: gray; font-weight: bold; margin-bottom: 6px;">Apellido</label>
-                <input type="text" id="onboarding-apellido" value="${preApellido}" placeholder="Ej: Perez" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 15px; outline: none;">
+                <label style="display: block; font-size: 13px; color: var(--text-muted, gray); font-weight: bold; margin-bottom: 6px;">Apellido</label>
+                <input type="text" id="onboarding-apellido" value="${preApellido}" placeholder="Ej: Perez" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #ccc); background: var(--bg-color, transparent); color: var(--text-color, #333); box-sizing: border-box; font-size: 15px; outline: none;">
             </div>
             
             <button id="btn-guardar-onboarding" style="width: 100%; background: var(--primary-color, #6200EE); color: white; border: none; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">Continuar</button>
@@ -151,7 +164,7 @@ function inyectarBotonPerfil(nombreCompleto) {
 
     const btnPerfil = document.createElement('div');
     btnPerfil.id = 'btn-flotante-perfil';
-    btnPerfil.style.cssText = 'width: 38px; height: 38px; border-radius: 50%; background-color: #CBA4FF; color: #4A148C; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; cursor: pointer; flex-shrink: 0; margin-left: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
+    btnPerfil.style.cssText = 'width: 38px; height: 38px; border-radius: 50%; background-color: var(--primary-color, #CBA4FF); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; cursor: pointer; flex-shrink: 0; margin-left: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
     btnPerfil.innerText = iniciales;
     
     btnPerfil.onclick = () => mostrarPantallaPerfil();
@@ -198,56 +211,56 @@ async function mostrarPantallaPerfil() {
 
     modal = document.createElement('div');
     modal.id = 'modal-perfil-usuario';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20, 20, 25, 0.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; padding: 10px;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay, rgba(20, 20, 25, 0.82)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; padding: 10px;';
     
     modal.innerHTML = `
-        <div style="background: #1E1D24; width: 100%; max-width: 480px; max-height: 92vh; border-radius: 28px; border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.6); position: relative;">
-            <div style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0;">
-                <span style="color: white; font-weight: bold; font-size: 16px;">Perfil de Usuario</span>
-                <button id="btn-cerrar-perfil" style="background: rgba(255,255,255,0.06); border: none; color: white; font-size: 16px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">✕</button>
+        <div style="background: var(--surface-color, #1E1D24); width: 100%; max-width: 480px; max-height: 92vh; border-radius: 28px; border: 1px solid var(--border-color, rgba(255,255,255,0.08)); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.6); position: relative;">
+            <div style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.05)); flex-shrink: 0;">
+                <span style="color: var(--text-color, white); font-weight: bold; font-size: 16px;">Perfil de Usuario</span>
+                <button id="btn-cerrar-perfil" style="background: var(--border-color, rgba(255,255,255,0.06)); border: none; color: var(--text-color, white); font-size: 16px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;">✕</button>
             </div>
             
             <div style="flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; box-sizing: border-box;">
                 
                 <div style="display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; flex-shrink: 0;">
-                    <div id="contenedor-avatar" style="width: 100px; height: 100px; border-radius: 50%; background-color: #CBA4FF; color: #4A148C; display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: bold; margin-bottom: 16px; position: relative; cursor: pointer; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.1);">
+                    <div id="contenedor-avatar" style="width: 100px; height: 100px; border-radius: 50%; background-color: var(--primary-color, #CBA4FF); color: white; display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: bold; margin-bottom: 16px; position: relative; cursor: pointer; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 2px solid var(--border-color, rgba(255,255,255,0.1));">
                         ${fotoPerfilUrl ? `<img src="${fotoPerfilUrl}" style="width:100%; height:100%; object-fit:cover;">` : iniciales}
                         <div style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: white;">📷</div>
                     </div>
                     <input type="file" id="input-foto-perfil" accept="image/*" style="display: none;">
                     
-                    <h2 style="color: white; margin: 0 0 4px 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">${window.miUsuario.nombre}</h2>
-                    <p style="color: #A0A0A0; margin: 0 0 16px 0; font-size: 14px;">${window.miUsuario.email}</p>
-                    <div style="background-color: #2B2A33; color: #E0E0E0; padding: 8px 16px; border-radius: 16px; font-size: 13px; font-weight: 500; border: 1px solid rgba(255,255,255,0.05);">
+                    <h2 style="color: var(--text-color, white); margin: 0 0 4px 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">${window.miUsuario.nombre}</h2>
+                    <p style="color: var(--text-muted, #A0A0A0); margin: 0 0 16px 0; font-size: 14px;">${window.miUsuario.email}</p>
+                    <div style="background-color: var(--bg-color, #2B2A33); color: var(--text-color, #E0E0E0); padding: 8px 16px; border-radius: 16px; font-size: 13px; font-weight: 500; border: 1px solid var(--border-color, rgba(255,255,255,0.05));">
                         ${congregacionTexto}
                     </div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; background: #25242C; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;">
-                    <div class="perfil-opcion" id="opc-editar-datos" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                <div style="display: flex; flex-direction: column; background: var(--bg-color, #25242C); border-radius: 20px; overflow: hidden; border: 1px solid var(--border-color, rgba(255,255,255,0.04)); flex-shrink: 0;">
+                    <div class="perfil-opcion" id="opc-editar-datos" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04)); display: flex; align-items: center; cursor: pointer; transition: opacity 0.2s;">
                         <span style="margin-right: 16px; font-size: 18px;">✏️</span>
-                        <span style="color: white; font-size: 15px; font-weight: 500;">Editar mis datos</span>
+                        <span style="color: var(--text-color, white); font-size: 15px; font-weight: 500;">Editar mis datos</span>
                     </div>
-                    <div class="perfil-opcion" id="opc-tema" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                    <div class="perfil-opcion" id="opc-tema" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04)); display: flex; align-items: center; cursor: pointer; transition: opacity 0.2s;">
                         <span style="margin-right: 16px; font-size: 18px;">⚙️</span>
-                        <span id="txt-tema-actual" style="color: white; font-size: 15px; font-weight: 500;">Tema: ${opcionesTemasTextos[temaActual]}</span>
+                        <span id="txt-tema-actual" style="color: var(--text-color, white); font-size: 15px; font-weight: 500;">Tema: ${opcionesTemasTextos[temaActual]}</span>
                     </div>
-                    <div class="perfil-opcion" id="opc-cambiar-cong" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
+                    <div class="perfil-opcion" id="opc-cambiar-cong" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04)); display: flex; align-items: center; cursor: pointer; transition: opacity 0.2s;">
                         <span style="margin-right: 16px; font-size: 18px;">🔄</span>
-                        <span style="color: white; font-size: 15px; font-weight: 500;">Cambiar de congregación</span>
+                        <span style="color: var(--text-color, white); font-size: 15px; font-weight: 500;">Cambiar de congregación</span>
                     </div>
-                    <div class="perfil-opcion" id="opc-reportar" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; cursor: pointer; background: rgba(203, 164, 255, 0.05); transition: background 0.2s;">
-                        <span style="margin-right: 16px; font-size: 18px; color: #CBA4FF;">💡</span>
-                        <span style="color: #CBA4FF; font-size: 15px; font-weight: bold;">Reportar problema o idea</span>
+                    <div class="perfil-opcion" id="opc-reportar" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04)); display: flex; align-items: center; cursor: pointer; background: rgba(203, 164, 255, 0.05); transition: opacity 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px; color: var(--primary-color, #CBA4FF);">💡</span>
+                        <span style="color: var(--primary-color, #CBA4FF); font-size: 15px; font-weight: bold;">Reportar problema o idea</span>
                     </div>
-                    <div class="perfil-opcion" id="opc-cerrar-sesion" style="padding: 16px 20px; display: flex; align-items: center; cursor: pointer; transition: background 0.2s;">
-                        <span style="margin-right: 16px; font-size: 18px; color: #E53935;">🚪</span>
-                        <span style="color: #E53935; font-size: 15px; font-weight: 500;">Cerrar sesión</span>
+                    <div class="perfil-opcion" id="opc-cerrar-sesion" style="padding: 16px 20px; display: flex; align-items: center; cursor: pointer; transition: opacity 0.2s;">
+                        <span style="margin-right: 16px; font-size: 18px; color: var(--error-text, #E53935);">🚪</span>
+                        <span style="color: var(--error-text, #E53935); font-size: 15px; font-weight: 500;">Cerrar sesión</span>
                     </div>
                 </div>
 
-                <div style="text-align: center; padding: 10px 20px 20px 20px; color: #777; font-size: 13px; margin-top: auto; flex-shrink: 0;">
-                    <div style="font-weight: bold; color: #CBA4FF; font-size: 14px; letter-spacing: 0.5px;">Mi Territorio Web</div>
+                <div style="text-align: center; padding: 10px 20px 20px 20px; color: var(--text-muted, #777); font-size: 13px; margin-top: auto; flex-shrink: 0;">
+                    <div style="font-weight: bold; color: var(--primary-color, #CBA4FF); font-size: 14px; letter-spacing: 0.5px;">Mi Territorio Web</div>
                     <div style="margin-top: 6px; font-weight: 500;">Versión instalada: ${WEB_VERSION}</div>
                 </div>
                 
@@ -256,10 +269,6 @@ async function mostrarPantallaPerfil() {
     `;
 
     document.body.appendChild(modal);
-
-    const styleHover = document.createElement('style');
-    styleHover.innerHTML = `.perfil-opcion:hover { background: rgba(255,255,255,0.03) !important; } #btn-cerrar-perfil:hover { background: rgba(255,255,255,0.12) !important; }`;
-    modal.appendChild(styleHover);
 
     function comprimirImagen(file, maxWithOrHeight = 700) {
         return new Promise((resolve) => {
@@ -332,46 +341,43 @@ async function mostrarPantallaPerfil() {
     };
 
     document.getElementById('opc-cambiar-cong').onclick = () => {
-        mostrarModalConfirmacion("¿Cambiar de congregación?", "Si sales de tu congregación actual, tu rol se perderá y volverás a la sala de espera al unirte a una nueva. ¿Estás seguro?", "Sí, salir", "#E53935", () => {
+        mostrarModalConfirmacion("¿Cambiar de congregación?", "Si sales de tu congregación actual, tu rol se perderá y volverás a la sala de espera al unirte a una nueva. ¿Estás seguro?", "Sí, salir", "var(--error-text)", () => {
             localStorage.removeItem('miCongregacionId'); location.reload();
         });
     };
 
     document.getElementById('opc-cerrar-sesion').onclick = () => {
-        mostrarModalConfirmacion("¿Cerrar sesión?", "¿Seguro que deseas cerrar tu sesión en este dispositivo?", "Cerrar sesión", "#E53935", async () => {
+        mostrarModalConfirmacion("¿Cerrar sesión?", "¿Seguro que deseas cerrar tu sesión en este dispositivo?", "Cerrar sesión", "var(--error-text)", async () => {
             await signOut(auth); modal.remove(); location.reload();
         });
     };
 
     document.getElementById('opc-reportar').onclick = () => abrirModalReporteAvanzado();
 }
-// ==========================================
-// MOTOR DE MODALES M3
-// ==========================================
 
 function mostrarModalEditarDatos(nombreActual, apellidoActual, onGuardar) {
     let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
     
     m.innerHTML = `
-        <div style="background: #25242C; width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08);">
-            <h3 style="color: white; margin: 0 0 20px 0; font-size: 20px; text-align: center;">Editar mis datos</h3>
-            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Nombre</label>
-            <input type="text" id="input-edit-nombre" value="${nombreActual}" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
-            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Apellido</label>
-            <input type="text" id="input-edit-apellido" value="${apellidoActual}" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 24px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+        <div style="background: var(--surface-color); width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid var(--border-color);">
+            <h3 style="color: var(--text-color); margin: 0 0 20px 0; font-size: 20px; text-align: center;">Editar mis datos</h3>
+            <label style="display: block; color: var(--text-muted); font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Nombre</label>
+            <input type="text" id="input-edit-nombre" value="${nombreActual}" style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 14px; border-radius: 12px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            <label style="display: block; color: var(--text-muted); font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Apellido</label>
+            <input type="text" id="input-edit-apellido" value="${apellidoActual}" style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 14px; border-radius: 12px; margin-bottom: 24px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
             <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                <button id="btn-cancelar-edit" style="background: transparent; border: none; color: #CBA4FF; font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
-                <button id="btn-guardar-edit" style="background: #CBA4FF; color: #4A148C; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Guardar</button>
+                <button id="btn-cancelar-edit" style="background: transparent; border: none; color: var(--primary-color); font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
+                <button id="btn-guardar-edit" style="background: var(--primary-color); color: white; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Guardar</button>
             </div>
         </div>
     `;
     document.body.appendChild(m);
     
-    document.getElementById('input-edit-nombre').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
-    document.getElementById('input-edit-nombre').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
-    document.getElementById('input-edit-apellido').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
-    document.getElementById('input-edit-apellido').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+    document.getElementById('input-edit-nombre').addEventListener('focus', (e) => e.target.style.borderColor = 'var(--primary-color)');
+    document.getElementById('input-edit-nombre').addEventListener('blur', (e) => e.target.style.borderColor = 'var(--border-color)');
+    document.getElementById('input-edit-apellido').addEventListener('focus', (e) => e.target.style.borderColor = 'var(--primary-color)');
+    document.getElementById('input-edit-apellido').addEventListener('blur', (e) => e.target.style.borderColor = 'var(--border-color)');
 
     document.getElementById('btn-cancelar-edit').onclick = () => m.remove();
     document.getElementById('btn-guardar-edit').onclick = () => {
@@ -387,16 +393,16 @@ function mostrarModalEditarDatos(nombreActual, apellidoActual, onGuardar) {
 
 function mostrarModalConfirmacion(titulo, mensaje, txtConfirmar, colorConfirmar, onConfirm) {
     let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
     
     m.innerHTML = `
-        <div style="background: #25242C; width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08); text-align: center;">
+        <div style="background: var(--surface-color); width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid var(--border-color); text-align: center;">
             <div style="font-size: 36px; margin-bottom: 16px; animation: latido 2s infinite;">⚠️</div>
-            <h3 style="color: white; margin: 0 0 12px 0; font-size: 20px;">${titulo}</h3>
-            <p style="color: #A0A0A0; font-size: 14px; margin: 0 0 28px 0; line-height: 1.5;">${mensaje}</p>
+            <h3 style="color: var(--text-color); margin: 0 0 12px 0; font-size: 20px;">${titulo}</h3>
+            <p style="color: var(--text-muted); font-size: 14px; margin: 0 0 28px 0; line-height: 1.5;">${mensaje}</p>
             <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button id="btn-accion-confirm" style="background: ${colorConfirmar}; color: white; border: none; font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px; box-shadow: 0 4px 12px rgba(229, 57, 53, 0.2);">${txtConfirmar}</button>
-                <button id="btn-cancelar-confirm" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: white; font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px;">Cancelar</button>
+                <button id="btn-accion-confirm" style="background: ${colorConfirmar}; color: white; border: none; font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px;">${txtConfirmar}</button>
+                <button id="btn-cancelar-confirm" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-color); font-weight: bold; padding: 14px; border-radius: 12px; cursor: pointer; font-size: 15px;">Cancelar</button>
             </div>
         </div>
     `;
@@ -406,37 +412,36 @@ function mostrarModalConfirmacion(titulo, mensaje, txtConfirmar, colorConfirmar,
     document.getElementById('btn-accion-confirm').onclick = () => { m.remove(); onConfirm(); };
 }
 
-// 🔥 EL NUEVO MODAL PARA CREAR CONGREGACIÓN 🔥
 function mostrarModalCrearCongregacion(onCrear) {
     let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
     
     m.innerHTML = `
-        <div style="background: #25242C; width: 100%; max-width: 340px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08);">
+        <div style="background: var(--surface-color); width: 100%; max-width: 340px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid var(--border-color);">
             <div style="font-size: 32px; text-align: center; margin-bottom: 12px;">🏛️</div>
-            <h3 style="color: white; margin: 0 0 20px 0; font-size: 20px; text-align: center;">Crear Congregación</h3>
+            <h3 style="color: var(--text-color); margin: 0 0 20px 0; font-size: 20px; text-align: center;">Crear Congregación</h3>
             
-            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Número Oficial</label>
-            <input type="number" id="input-crear-numero" placeholder="Ej: 1552" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            <label style="display: block; color: var(--text-muted); font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Número Oficial</label>
+            <input type="number" id="input-crear-numero" placeholder="Ej: 1552" style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 14px; border-radius: 12px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
             
-            <label style="display: block; color: #A0A0A0; font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Nombre de la Congregación</label>
-            <input type="text" id="input-crear-nombre" placeholder="Ej: Mendoza" style="width: 100%; background: #1E1D24; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 14px; border-radius: 12px; margin-bottom: 20px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
+            <label style="display: block; color: var(--text-muted); font-size: 12px; font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Nombre de la Congregación</label>
+            <input type="text" id="input-crear-nombre" placeholder="Ej: Mendoza" style="width: 100%; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 14px; border-radius: 12px; margin-bottom: 20px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s;">
             
-            <p id="error-crear-cong" style="color: #E53935; font-size: 13px; margin: 0 0 16px 0; display: none; text-align: center; font-weight: bold;"></p>
+            <p id="error-crear-cong" style="color: var(--error-text); font-size: 13px; margin: 0 0 16px 0; display: none; text-align: center; font-weight: bold;"></p>
 
             <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                <button id="btn-cancelar-crear" style="background: transparent; border: none; color: #CBA4FF; font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
-                <button id="btn-guardar-crear" style="background: #CBA4FF; color: #4A148C; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Crear</button>
+                <button id="btn-cancelar-crear" style="background: transparent; border: none; color: var(--primary-color); font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Cancelar</button>
+                <button id="btn-guardar-crear" style="background: var(--primary-color); color: white; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: 10px; cursor: pointer;">Crear</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(m);
     
-    document.getElementById('input-crear-numero').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
-    document.getElementById('input-crear-numero').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
-    document.getElementById('input-crear-nombre').addEventListener('focus', (e) => e.target.style.borderColor = '#CBA4FF');
-    document.getElementById('input-crear-nombre').addEventListener('blur', (e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)');
+    document.getElementById('input-crear-numero').addEventListener('focus', (e) => e.target.style.borderColor = 'var(--primary-color)');
+    document.getElementById('input-crear-numero').addEventListener('blur', (e) => e.target.style.borderColor = 'var(--border-color)');
+    document.getElementById('input-crear-nombre').addEventListener('focus', (e) => e.target.style.borderColor = 'var(--primary-color)');
+    document.getElementById('input-crear-nombre').addEventListener('blur', (e) => e.target.style.borderColor = 'var(--border-color)');
 
     const lblError = document.getElementById('error-crear-cong');
 
@@ -456,11 +461,6 @@ function mostrarModalCrearCongregacion(onCrear) {
     };
 }
 
-
-// ==========================================
-// RESTO DEL CÓDIGO INTACTO
-// ==========================================
-
 function abrirModalReporteAvanzado() {
     let modal = document.getElementById('modal-reporte-pro');
     if (modal) modal.remove();
@@ -470,34 +470,34 @@ function abrirModalReporteAvanzado() {
 
     modal = document.createElement('div');
     modal.id = 'modal-reporte-pro';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1E1D24; z-index: 10000; display: flex; flex-direction: column; font-family: sans-serif;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--surface-color); z-index: 10000; display: flex; flex-direction: column; font-family: sans-serif;';
     
     modal.innerHTML = `
-        <div style="padding: 16px; display: flex; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
-            <button id="btn-cerrar-reporte" style="background: none; border: none; color: white; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px;">
+        <div style="padding: 16px; display: flex; align-items: center; border-bottom: 1px solid var(--border-color);">
+            <button id="btn-cerrar-reporte" style="background: none; border: none; color: var(--text-color); font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px;">
                 ✕ <span style="font-size: 18px;">Reportar Idea o Problema</span>
             </button>
         </div>
         
         <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
-            <h3 style="color: #CBA4FF; margin: 0 0 8px 0; font-size: 18px;">¡Tu opinión nos ayuda a mejorar!</h3>
-            <p style="color: #A0A0A0; font-size: 14px; margin: 0 0 20px 0; line-height: 1.4;">Cuéntanos qué problema tuviste o qué idea genial se te ocurrió. Puedes adjuntar fotos o grabar un audio.</p>
+            <h3 style="color: var(--primary-color); margin: 0 0 8px 0; font-size: 18px;">¡Tu opinión nos ayuda a mejorar!</h3>
+            <p style="color: var(--text-muted); font-size: 14px; margin: 0 0 20px 0; line-height: 1.4;">Cuéntanos qué problema tuviste o qué idea genial se te ocurrió. Puedes adjuntar fotos o grabar un audio.</p>
             
-            <textarea id="txt-reporte-detalle" placeholder="Escribe aquí todos los detalles..." style="width: 100%; height: 150px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 16px; color: white; font-size: 15px; resize: none; outline: none; margin-bottom: 20px; box-sizing: border-box;"></textarea>
+            <textarea id="txt-reporte-detalle" placeholder="Escribe aquí todos los detalles..." style="width: 100%; height: 150px; background: transparent; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; color: var(--text-color); font-size: 15px; resize: none; outline: none; margin-bottom: 20px; box-sizing: border-box;"></textarea>
             
             <div id="preview-adjunto" style="display: none; align-items: center; gap: 10px; background: rgba(203, 164, 255, 0.1); padding: 12px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(203, 164, 255, 0.3);">
                 <span id="icono-adjunto" style="font-size: 24px;">📄</span>
-                <span id="nombre-adjunto" style="color: white; font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Archivo.jpg</span>
-                <button id="btn-quitar-adjunto" style="background: none; border: none; color: #E53935; font-size: 18px; cursor: pointer;">✕</button>
+                <span id="nombre-adjunto" style="color: var(--text-color); font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Archivo.jpg</span>
+                <button id="btn-quitar-adjunto" style="background: none; border: none; color: var(--error-text); font-size: 18px; cursor: pointer;">✕</button>
             </div>
 
             <div style="display: flex; gap: 12px;">
-                <button id="btn-adjuntar" style="flex: 1; background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 12px; padding: 14px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+                <button id="btn-adjuntar" style="flex: 1; background: transparent; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 12px; padding: 14px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
                     📎 Adjuntar
                 </button>
                 <input type="file" id="input-archivo-reporte" accept="image/*,video/*,.pdf" style="display: none;">
                 
-                <button id="btn-microfono" style="width: 56px; height: 52px; background: #CBA4FF; border: none; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                <button id="btn-microfono" style="width: 56px; height: 52px; background: var(--primary-color); border: none; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
                     🎤
                 </button>
                 <input type="file" id="input-audio-reporte" accept="audio/*" capture="microphone" style="display: none;">
@@ -505,7 +505,7 @@ function abrirModalReporteAvanzado() {
 
             <div style="flex: 1;"></div>
 
-            <button id="btn-enviar-reporte" style="width: 100%; background: #CBA4FF; color: #4A148C; border: none; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(203, 164, 255, 0.2); margin-top: 20px;">
+            <button id="btn-enviar-reporte" style="width: 100%; background: var(--primary-color); color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(203, 164, 255, 0.2); margin-top: 20px;">
                 Enviar Reporte
             </button>
         </div>
@@ -584,21 +584,21 @@ function mostrarBuscadorCongregaciones(email, nombreCompleto) {
     if (!contenedor) {
         contenedor = document.createElement('div');
         contenedor.id = 'contenedor-onboarding';
-        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
         document.body.appendChild(contenedor);
     }
 
     contenedor.innerHTML = `
-        <div style="background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 420px; text-align: center; box-sizing: border-box;">
-            <h3 style="margin: 0 0 8px 0; color: #333; font-size: 20px;">Hola, ${nombreCompleto}</h3>
-            <p style="color: #666; margin-bottom: 20px; font-size: 14px;">Busca tu congregación para unirte:</p>
+        <div style="background: var(--surface-color); padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 420px; text-align: center; box-sizing: border-box; border: 1px solid var(--border-color);">
+            <h3 style="margin: 0 0 8px 0; color: var(--text-color); font-size: 20px;">Hola, ${nombreCompleto}</h3>
+            <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px;">Busca tu congregación para unirte:</p>
             <div style="position: relative; text-align: left;">
-                <input type="text" id="input-busqueda-cong" placeholder="Nombre o Número (Ej: Mendoza)" style="width: 100%; padding: 12px 40px 12px 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 15px; outline: none;">
+                <input type="text" id="input-busqueda-cong" placeholder="Nombre o Número (Ej: Mendoza)" style="width: 100%; padding: 12px 40px 12px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); box-sizing: border-box; font-size: 15px; outline: none;">
                 <span style="position: absolute; right: 12px; top: 12px; color: #aaa;">🔍</span>
             </div>
-            <div id="lista-resultados-cong" style="max-height: 180px; overflow-y: auto; margin-top: 10px; border-radius: 8px; background: #f9f9f9; border: 1px solid #eee; display: none;"></div>
+            <div id="lista-resultados-cong" style="max-height: 180px; overflow-y: auto; margin-top: 10px; border-radius: 8px; background: var(--bg-color); border: 1px solid var(--border-color); display: none;"></div>
             <div style="margin-top: 25px;">
-                <button id="btn-abrir-crear-cong" style="background: none; border: none; color: #6200EE; font-weight: bold; cursor: pointer; font-size: 14px;">¿Tu congregación no está? Créala aquí</button>
+                <button id="btn-abrir-crear-cong" style="background: none; border: none; color: var(--primary-color); font-weight: bold; cursor: pointer; font-size: 14px;">¿Tu congregación no está? Créala aquí</button>
             </div>
         </div>
     `;
@@ -628,13 +628,13 @@ function mostrarBuscadorCongregaciones(email, nombreCompleto) {
             listaResultados.style.display = 'block';
             filtrados.forEach(cong => {
                 const item = document.createElement('div');
-                item.style.cssText = 'padding: 12px; cursor: pointer; border-bottom: 1px solid #eee; text-align: left;';
-                item.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 15px;">${cong.nombre}</div><div style="font-size: 12px; color: #777;">Nº Oficial: ${cong.id}</div>`;
+                item.style.cssText = 'padding: 12px; cursor: pointer; border-bottom: 1px solid var(--border-color); text-align: left;';
+                item.innerHTML = `<div style="font-weight: bold; color: var(--text-color); font-size: 15px;">${cong.nombre}</div><div style="font-size: 12px; color: var(--text-muted);">Nº Oficial: ${cong.id}</div>`;
                 
                 item.onclick = async () => {
                     inputBusqueda.disabled = true;
                     listaResultados.style.display = 'none';
-                    contenedor.innerHTML = '<div style="color:gray; font-weight:bold;">Verificando acceso... ⏳</div>';
+                    contenedor.innerHTML = '<div style="color:var(--text-muted); font-weight:bold;">Verificando acceso... ⏳</div>';
                     
                     try {
                         const docRef = doc(db, "congregaciones", cong.id);
@@ -661,12 +661,11 @@ function mostrarBuscadorCongregaciones(email, nombreCompleto) {
                 listaResultados.appendChild(item);
             });
         } else {
-            listaResultados.innerHTML = '<div style="padding: 12px; color: #c62828; font-size: 13px; text-align: left;">No se encontró ninguna congregación.</div>';
+            listaResultados.innerHTML = '<div style="padding: 12px; color: var(--error-text); font-size: 13px; text-align: left;">No se encontró ninguna congregación.</div>';
             listaResultados.style.display = 'block';
         }
     };
 
-    // 🔥 ACÁ CONECTAMOS EL NUEVO MODAL DE CREAR CONGREGACIÓN 🔥
     btnAbrirCrear.onclick = () => {
         mostrarModalCrearCongregacion((numero, nombre, modalReference) => {
             const docRef = doc(db, "congregaciones", numero);
@@ -712,14 +711,15 @@ function activarVigilanteRealtime(email, congId, nombreCompleto) {
 
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRolActual, congregacionId: congId, congregacionNombre: congData.nombre || '' };
 
-            const tabServicio = document.getElementById('tab-servicio');
+            aplicarCandadoPrivacidad(miRolActual);
+
             const btnFabRegistro = document.getElementById('btn-fab-registro');
-            if (miRolActual === 'siervo' || miRolActual === 'ayudante' || miRolActual === 'conductor') {
-                if (tabServicio) tabServicio.style.display = 'block';
-                if (btnFabRegistro) btnFabRegistro.style.display = 'block';
-            } else {
-                if (tabServicio) tabServicio.style.display = 'none';
-                if (btnFabRegistro) btnFabRegistro.style.display = 'none';
+            if (btnFabRegistro) {
+                if (miRolActual === 'siervo' || miRolActual === 'ayudante' || miRolActual === 'conductor') {
+                    btnFabRegistro.style.display = 'block';
+                } else {
+                    btnFabRegistro.style.display = 'none';
+                }
             }
 
             if (!window.motoresArrancados) {
@@ -737,21 +737,21 @@ function mostrarPantallaSalaEspera(congId, congNombre, email, nombreCompleto) {
     if (!contenedor) {
         contenedor = document.createElement('div');
         contenedor.id = 'contenedor-onboarding';
-        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
+        contenedor.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
         document.body.appendChild(contenedor);
     }
 
     contenedor.innerHTML = `
-        <div style="background: white; padding: 40px 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 420px; text-align: center; box-sizing: border-box;">
+        <div style="background: var(--surface-color); padding: 40px 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 420px; text-align: center; box-sizing: border-box; border: 1px solid var(--border-color);">
             <div style="font-size: 52px; margin-bottom: 20px; animation: rotarReloj 2s linear infinite;">⏳</div>
-            <h3 style="margin: 0 0 12px 0; color: #333; font-size: 22px; font-weight: bold;">Solicitud Enviada</h3>
-            <p style="color: #666; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+            <h3 style="margin: 0 0 12px 0; color: var(--text-color); font-size: 22px; font-weight: bold;">Solicitud Enviada</h3>
+            <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
                 Tu solicitud para unirte a <strong>${congNombre} (Nº ${congId})</strong> está en lista de espera.
             </p>
-            <p style="color: #6200EE; font-size: 14px; font-weight: bold; line-height: 1.5; margin-bottom: 30px;">
+            <p style="color: var(--primary-color); font-size: 14px; font-weight: bold; line-height: 1.5; margin-bottom: 30px;">
                 Espera que el Siervo de Territorios apruebe tu cuenta. Esta pantalla se actualizará de forma automática.
             </p>
-            <button id="btn-cancelar-solicitud" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; background: transparent; color: #555; font-weight: bold; cursor: pointer; transition: background 0.2s;">Cancelar solicitud</button>
+            <button id="btn-cancelar-solicitud" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); font-weight: bold; cursor: pointer; transition: background 0.2s;">Cancelar solicitud</button>
         </div>
     `;
 
@@ -760,7 +760,7 @@ function mostrarPantallaSalaEspera(congId, congNombre, email, nombreCompleto) {
             "¿Cancelar solicitud?", 
             "¿Seguro que deseas cancelar tu ingreso a esta congregación? Se cerrará tu sesión para que puedas ingresar con otra cuenta si lo deseas.", 
             "Sí, cancelar y salir", 
-            "#E53935", 
+            "var(--error-text)", 
             async () => {
                 if (window.unsubVigilanteRole) { window.unsubVigilanteRole(); window.unsubVigilanteRole = null; }
                 localStorage.removeItem('miCongregacionId'); 
