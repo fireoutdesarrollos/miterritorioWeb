@@ -1,53 +1,68 @@
 // ==========================================
-// ARCHIVO: ui-controller.js (SIN CONFLICTOS + CANDADO DE PRIVACIDAD)
+// ARCHIVO: app.js (MOTOR PRINCIPAL RESTAURADO)
 // ==========================================
+import { iniciarControladorUI } from "./ui-controller.js";
+import { iniciarAutenticacion } from "./auth-service.js";
+import { inicializarGuias } from "./guide-service.js";
 
-export function iniciarControladorUI() {
-    // 1. Manejo de Pestañas (Tabs)
-    const tabs = document.querySelectorAll('.tab');
-    const views = document.querySelectorAll('.view-section');
+console.log("🚀 MOTOR JS MODULAR (VERSIÓN 200 - ARQUITECTURA LIMPIA) CARGADO");
 
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            history.pushState({ page: 'tab' }, '', '');
-            
-            tabs.forEach(t => t.classList.remove('active')); 
-            views.forEach(v => v.style.display = 'none');
-            
-            tab.classList.add('active'); 
-            const tId = tab.getAttribute('data-target'); 
-            const tView = document.getElementById(tId);
-            
-            if (tId === 'map-view' && tView) tView.style.display = 'flex'; 
-            else if (tView) tView.style.display = 'block';
-        });
+iniciarControladorUI();
+iniciarAutenticacion();
+if (typeof inicializarGuias === 'function') inicializarGuias();
+
+// ========================================================
+// ESCUDO DE NAVEGACIÓN M3 (BOTÓN ATRÁS NATIVO DEL CELULAR)
+// ========================================================
+history.pushState({ escudo: true }, null, null);
+
+window.addEventListener('popstate', (event) => {
+    let cerramosAlgo = false;
+
+    const modalesFlotantes = Array.from(document.body.children).filter(el => {
+        const z = parseInt(el.style.zIndex) || 0;
+        return el.tagName === 'DIV' && el.style.position === 'fixed' && z >= 9000;
     });
 
-    // 2. Cerrar Modales básicos
-    const btnCerrarFicha = document.getElementById('btn-cerrar-ficha');
-    if (btnCerrarFicha) btnCerrarFicha.onclick = () => history.back();
-
-    // 🛑 ATENCIÓN: Se eliminó el eventListener 'popstate' de aquí.
-    // Ahora el Escudo Avanzado de app.js tiene el control exclusivo del botón "Atrás" de Android.
-}
-
-// 🔥 EL CANDADO DEFINITIVO DE PRIVACIDAD 🔥
-export function aplicarCandadoPrivacidad(rol) {
-    const tabServicio = document.querySelector('.tab[data-target="servicio-view"]');
-    
-    if (!tabServicio) return;
-
-    // Solo la alta gerencia puede ver la pestaña
-    if (rol === 'siervo' || rol === 'ayudante') {
-        tabServicio.style.display = 'flex'; // o 'block', dependiendo de tu flexbox
-    } else {
-        // Publicadores, invitados y CONDUCTORES rebotan acá
-        tabServicio.style.display = 'none';
-        
-        // Medida de seguridad extra: si un conductor estaba en la pestaña, lo pateamos al mapa
-        if (tabServicio.classList.contains('active')) {
-            const tabMapa = document.querySelector('.tab[data-target="map-view"]');
-            if (tabMapa) tabMapa.click();
+    if (modalesFlotantes.length > 0) {
+        modalesFlotantes[modalesFlotantes.length - 1].remove();
+        cerramosAlgo = true;
+    } 
+    else {
+        const fichaModal = document.getElementById('ficha-modal');
+        if (fichaModal && fichaModal.style.display !== 'none' && fichaModal.style.display !== '') {
+            
+            if (window.comprobarCambiosAntesDeSalir && window.comprobarCambiosAntesDeSalir()) {
+                history.pushState({ escudo: true }, null, null);
+                
+                if (window.mostrarModalCambiosSinGuardar) {
+                    window.mostrarModalCambiosSinGuardar(
+                        () => { document.getElementById('btn-guardar-ficha').click(); }, 
+                        () => { fichaModal.style.display = 'none'; } 
+                    );
+                }
+                return; 
+            }
+            
+            fichaModal.style.display = 'none';
+            cerramosAlgo = true;
+        }
+        else {
+            const panelRegistro = document.getElementById('panel-registro');
+            if (panelRegistro && panelRegistro.style.display !== 'none' && panelRegistro.style.display !== '') {
+                panelRegistro.style.display = 'none';
+                cerramosAlgo = true;
+            }
         }
     }
-}
+
+    if (cerramosAlgo) {
+        history.pushState({ escudo: true }, null, null);
+    } else {
+        const tabMapa = document.querySelector('.tab[data-target="map-view"]');
+        if (tabMapa && !tabMapa.classList.contains('active')) {
+            tabMapa.click();
+            history.pushState({ escudo: true }, null, null);
+        }
+    }
+});

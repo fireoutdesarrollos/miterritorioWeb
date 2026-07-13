@@ -1,145 +1,168 @@
 // ==========================================
-// ARCHIVO: map-service.js (CON PINES ROJOS EXACTOS PARA CONDUCTORES)
+// ARCHIVO: map-service.js (CORE PRINCIPAL LIMPIO)
 // ==========================================
 import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 
+// Importamos las herramientas matemáticas y de texto
+import { 
+    oscurecerColorWeb, obtenerColorPin, normalizarTexto, configurarAutocomplete, 
+    parsearNotasHistorial, empaquetarNotasHistorial, formatearFechaHoy 
+} from "./map-helpers.js";
+
+// Importamos las herramientas visuales y modales (esto también carga las funciones window.*)
+import { mostrarModalEditarNota, abrirNavegadorGPS } from "./ui-utils.js";
+
 window.mapaGlobal = null;
 window.pinesVisitas = [];
-let pinesAlertasGlobales = []; // 🔥 Nuevo: Array para los pines rojos de la congregación
+let pinesAlertasGlobales = []; 
 let filtroActual = 'Todos';
 let todasLasVisitas = [];
-let alertasGlobalesData = []; // 🔥 Nuevo: Guarda la info cruda de las alertas
+let alertasGlobalesData = []; 
 
 let mapasOcupados = {}; 
 let marcadoresMicroMap = {}; 
 let alertasNoVisitarPorManzana = {}; 
 let ticketsActivosGlobales = new Set(); 
 
+// 🔥 Variables de Motor de Ciclos
+let ultimosReportesPorManzana = {};
+let ultimaFechaCompletoPorTerritorio = {};
+
 export function refrescarEstilosMapa() {
     if(!window.mapaGlobal || !window.miUsuario) return;
     
     const rol = window.miUsuario.rol;
     const miNombre = window.miUsuario.nombre.trim().toLowerCase();
+    
+    const ahora = Date.now();
+    const tiempoLimite = 180 * 24 * 60 * 60 * 1000; // 6 meses
+
+    // 🔥 Calculamos en memoria qué territorios están 100% completos
+    const territoriosTotalmenteCompletos = new Set();
+    const gruposPoligonos = {};
+    
+    window.mapaGlobal.data.forEach(feature => {
+        const numTerritorio = feature.getProperty('territorio');
+        if (!numTerritorio) return;
+        const numTStr = `T${numTerritorio}`.trim(); 
+        if (!gruposPoligonos[numTStr]) gruposPoligonos[numTStr] = [];
+        gruposPoligonos[numTStr].push(feature);
+    });
+
+    for (const [prefijo, poligonos] of Object.entries(gruposPoligonos)) {
+        const fechaCompleto = ultimaFechaCompletoPorTerritorio[prefijo] || 0;
+        let todosHechosEnEstaRonda = poligonos.length > 0;
+        
+        for (let p of poligonos) {
+            const numMz = p.getProperty('numero');
+            if(!numMz || numMz.toLowerCase() === 'plaza') continue;
+            
+            const etiqueta = `${prefijo} - ${numMz}`;
+            const f = ultimosReportesPorManzana[etiqueta] || 0;
+            if (f <= fechaCompleto) {
+                todosHechosEnEstaRonda = false;
+                break;
+            }
+        }
+        if (todosHechosEnEstaRonda) territoriosTotalmenteCompletos.add(prefijo);
+    }
 
     window.mapaGlobal.data.setStyle((feature) => {
         const numTerritorio = feature.getProperty('territorio') || '-';
         const numManzana = feature.getProperty('numero') || '-';
         const etiqueta = `T${numTerritorio} - ${numManzana}`;
+        const prefijoTerritorio = `T${numTerritorio}`.trim();
         
         let fillColor = feature.getProperty('fill') || '#6200EE';
         let strokeColor = '#444444';
         let strokeWeight = 1;
         let fillOpacity = 0.35;
 
-        const asignadoA = mapasOcupados[etiqueta];
-        const estaOcupado = asignadoA !== undefined;
-        const esMio = estaOcupado && asignadoA.trim().toLowerCase() === miNombre;
-        const puedeVerBloqueo = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
+        const infoOcupacion = mapasOcupados[etiqueta];
+        const estaOcupado = infoOcupacion !== undefined;
+        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
+        const fechaAsignacion = infoOcupacion ? infoOcupacion.fechaAsignacion : 0;
 
-        if (window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta)) {
-            fillColor = '#6200EE'; fillOpacity = 0.7; strokeColor = 'white'; strokeWeight = 3;
-        } else if (esMio) {
-            fillColor = '#4CAF50'; fillOpacity = 0.6; strokeColor = '#388E3C'; strokeWeight = 3;
-        } else if (estaOcupado && puedeVerBloqueo) {
-            fillColor = '#424242'; fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
+        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
+        const estaSeleccionadaParaRegistro = window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta);
+        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
+
+        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
+        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
+
+        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
+        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
+        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
+        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
+
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica;
+
+        if (window.modoRegistroActivo && estaSeleccionadaParaRegistro) {
+            fillColor = '#6200EE'; fillOpacity = 0.5; strokeColor = 'white'; strokeWeight = 3;
+        } else if (mostrarProgreso && !window.modoRegistroActivo) {
+            fillColor = '#808080'; fillOpacity = 0.5; strokeColor = '#A9A9A9'; strokeWeight = 1; 
+        } else if (esMio && !window.modoRegistroActivo) {
+            fillColor = '#4CAF50'; fillOpacity = 0.5; strokeColor = '#388E3C'; strokeWeight = 3;
+        } else if (estaOcupado && puedeVerOcupacion) {
+            fillColor = oscurecerColorWeb(fillColor); fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
         }
 
         return { fillColor, strokeColor, strokeWeight, fillOpacity };
     });
 
     for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
-        const asignadoA = mapasOcupados[etiqueta];
-        const estaOcupado = asignadoA !== undefined;
-        const esMio = estaOcupado && asignadoA.trim().toLowerCase() === miNombre;
+        
+        const partes = etiqueta.split('-');
+        const prefijoTerritorio = partes[0].trim(); 
+        
+        const infoOcupacion = mapasOcupados[etiqueta];
+        const estaOcupado = infoOcupacion !== undefined;
+        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
+        const fechaAsignacion = infoOcupacion ? infoOcupacion.fechaAsignacion : 0;
+
+        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
+        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
         const hayAlertaGlobal = alertasNoVisitarPorManzana[etiqueta];
+
+        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
+        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
+        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
+
+        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
+        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
+        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
+
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica;
+
+        let textoExtra = "";
+        if (mostrarProgreso && (puedeVerOcupacion || esMio)) {
+            const dateObj = new Date(fechaUltimoReporteManzana);
+            const dia = dateObj.getDate().toString().padStart(2, '0');
+            const mes = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            textoExtra = `\n✅ ${dia}/${mes}`;
+        }
 
         let textoMostrar = etiqueta;
         
-        if (esMio) {
-            textoMostrar = `⭐ ${etiqueta}`; 
+        if (esMio && !mostrarProgreso) {
+            textoMostrar = `${etiqueta}\n⭐ Mi Territorio`; 
+        } else if (esMio && mostrarProgreso) {
+            textoMostrar = `${etiqueta}${textoExtra}`; 
         } else if (estaOcupado && (rol === "siervo" || rol === "ayudante")) {
-            const soloNombre = asignadoA.split(' ')[0]; 
-            textoMostrar = `👤 ${etiqueta} (${soloNombre})`; 
+            const soloNombre = nombreAsignado.split(' ')[0]; 
+            textoMostrar = `${etiqueta}\n👤 ${soloNombre}${textoExtra}`; 
         } else if (estaOcupado && rol === "conductor") {
-            textoMostrar = `🔒 ${etiqueta}`; 
+            textoMostrar = `${etiqueta}\n🔒 Asignado${textoExtra}`; 
+        } else {
+             textoMostrar = `${etiqueta}${textoExtra}`; 
         }
 
-        if (hayAlertaGlobal && (rol === "conductor" || rol === "siervo" || rol === "ayudante")) {
+        if (hayAlertaGlobal && puedeVerOcupacion) {
              textoMostrar = `⛔ ${textoMostrar}`;
         }
 
         marker.setLabel({ text: textoMostrar, color: 'black', fontWeight: '900', fontSize: '14px', className: 'map-label-micro' });
-    }
-}
-
-function obtenerColorPin(estado) {
-    let color = '#E65100'; 
-    if (estado === 'Nueva') color = '#0288D1'; 
-    if (estado === 'Ausente') color = '#D32F2F'; 
-    if (estado === 'Revisita') color = '#388E3C'; 
-    if (estado === 'Estudio') color = '#FBC02D'; 
-    if (estado === 'No visitar' || estado === 'Quitar de No Visitar') color = '#7B1FA2'; 
-    if (estado === 'AlertaGlobal') color = '#B71C1C'; // 🔥 Nuevo: Rojo oscuro para alertas de conductores
-
-    const svgMarker = encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
-            <path fill="${color}" stroke="white" stroke-width="2" d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 24 12 24s12-16.5 12-24c0-6.627-5.373-12-12-12zm0 17c-2.761 0-5-2.239-5-5s2.239-5 5-5 5 2.239 5 5-2.239 5-5 5z"/>
-        </svg>
-    `);
-
-    return { 
-        url: `data:image/svg+xml;charset=UTF-8,${svgMarker}`, 
-        scaledSize: new google.maps.Size(28, 42),
-        anchor: new google.maps.Point(14, 42)
-    };
-}
-
-function normalizarTexto(texto) {
-    if (!texto) return "";
-    return texto.toString().toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-        .replace(/v/g, "b"); 
-}
-
-function configurarAutocomplete(inputId, listId, opciones) {
-    const input = document.getElementById(inputId);
-    const list = document.getElementById(listId);
-    if (!input || !list) return;
-
-    input.addEventListener('focus', () => renderList(input.value));
-    input.addEventListener('input', (e) => renderList(e.target.value));
-
-    document.addEventListener('click', (e) => {
-        if (e.target !== input && !list.contains(e.target)) list.style.display = 'none';
-    });
-
-    function renderList(query) {
-        list.innerHTML = '';
-        const queryWords = normalizarTexto(query).trim().split(/\s+/);
-        
-        const filtrados = opciones.filter(opc => {
-            const opcNorm = normalizarTexto(opc);
-            return queryWords.every(word => opcNorm.includes(word));
-        });
-        
-        if (filtrados.length === 0) {
-            list.style.display = 'none';
-            return;
-        }
-
-        filtrados.forEach(opc => {
-            const item = document.createElement('div');
-            item.className = 'autocomplete-item';
-            item.textContent = opc;
-            item.onmousedown = (e) => { 
-                e.preventDefault(); 
-                input.value = opc;
-                list.style.display = 'none';
-            };
-            list.appendChild(item);
-        });
-        list.style.display = 'block';
     }
 }
 
@@ -173,37 +196,44 @@ function limpiarPinesHuerfanos() {
     });
 }
 
-// 🔥 NUEVO: Dibuja los pines rojos exactos de las casas bloqueadas 🔥
 function renderizarAlertasGlobales() {
-    // 1. Limpiamos los pines viejos
     pinesAlertasGlobales.forEach(pin => pin.setMap(null));
     pinesAlertasGlobales = [];
 
     if (!window.mapaGlobal || !window.miUsuario) return;
 
-    // 2. Solo los de la alta gerencia pueden ver estos pines
     const rol = window.miUsuario.rol;
     const puedeVerBloqueos = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
     if (!puedeVerBloqueos) return;
 
     alertasGlobalesData.forEach(alerta => {
-        // Solo dibujamos si el ticket guardó las coordenadas
-        if (alerta.latitud && alerta.longitud) {
-            
-            // Filtro: Si la alerta la creé YO, ya estoy viendo mi pin morado personal, así que no pongo el rojo encima.
-            if (alerta.publicadorEmail === window.miUsuario.email) return;
+        const lat = parseFloat(alerta.latitud);
+        const lng = parseFloat(alerta.longitud);
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+            if (rol === "publicador" && alerta.publicadorEmail === window.miUsuario.email) return;
 
             const pinRojo = new google.maps.Marker({
-                position: { lat: alerta.latitud, lng: alerta.longitud },
+                position: { lat: lat, lng: lng },
                 map: window.mapaGlobal,
-                icon: obtenerColorPin('AlertaGlobal'), // Rojo sangre
-                zIndex: 9999 // Siempre por encima del resto
+                icon: obtenerColorPin('AlertaGlobal'), 
+                zIndex: 9999 
             });
 
-            // Si el conductor toca el pin rojo, le avisa la dirección
             pinRojo.addListener('click', () => {
-                if(!window.modoRegistroActivo && window.mostrarToastM3) {
-                    window.mostrarToastM3(`⛔ Casa Bloqueada: ${alerta.direccion || 'Sin dirección'}`, "error");
+                if(!window.modoRegistroActivo) {
+                    abrirFichaVisita({
+                        id: alerta.id, 
+                        nombre: alerta.nombreVisita || 'Nueva',
+                        apellido: alerta.apellidoVisita || 'Visita',
+                        territorio: alerta.territorio,
+                        poligono: alerta.poligono,
+                        latitud: lat,
+                        longitud: lng,
+                        estado: 'No visitar', 
+                        direccion: alerta.direccion || '',
+                        notas: `[BLOQUEO OFICIAL] Motivo original: ${alerta.motivo || 'Sin detalles'}`
+                    });
                 }
             });
 
@@ -221,7 +251,9 @@ export async function inicializarMapaYVisitas() {
         mapasOcupados = {};
         snapshot.forEach(doc => {
             const data = doc.data();
-            if (!data.estaDisponible) mapasOcupados[doc.id] = data.asignadoA;
+            if (!data.estaDisponible) {
+                mapasOcupados[doc.id] = { asignadoA: data.asignadoA, fechaAsignacion: data.fecha || 0 };
+            }
         });
         refrescarEstilosMapa();
     });
@@ -244,8 +276,10 @@ export async function inicializarMapaYVisitas() {
         snapshot.forEach(docSnap => {
             ticketsActivosGlobales.add(docSnap.id); 
             const data = docSnap.data();
+            data.id = docSnap.id; 
+            
             if (data.estado === "Aprobado") {
-                alertasGlobalesData.push(data); // Guardamos la info cruda (incluyendo lat/lng)
+                alertasGlobalesData.push(data); 
                 const etiqueta = `T${data.territorio} - ${data.poligono}`;
                 alertasNoVisitarPorManzana[etiqueta] = true;
             }
@@ -253,7 +287,38 @@ export async function inicializarMapaYVisitas() {
         
         limpiarPinesHuerfanos(); 
         refrescarEstilosMapa();
-        renderizarAlertasGlobales(); // 🔥 Mandamos a dibujar los pines rojos
+        renderizarAlertasGlobales(); 
+    });
+
+    // 🔥 MOTOR DE CICLOS EN WEB 🔥
+    const qReportes = collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad");
+    onSnapshot(qReportes, (snapshot) => {
+        const reportesManzanas = {};
+        const reportesTerritoriosCompletos = {};
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const fecha = data.fecha || 0;
+            const cobertura = data.cobertura || "Parcial";
+            const manzanas = data.manzanas || [];
+
+            manzanas.forEach(m => {
+                const fechaExistente = reportesManzanas[m] || 0;
+                if (fecha > fechaExistente) reportesManzanas[m] = fecha;
+            });
+
+            if (cobertura === "Completo") {
+                const prefijos = [...new Set(manzanas.map(m => m.split("-")[0].trim()))];
+                prefijos.forEach(prefijo => {
+                    const fechaExistente = reportesTerritoriosCompletos[prefijo] || 0;
+                    if (fecha > fechaExistente) reportesTerritoriosCompletos[prefijo] = fecha;
+                });
+            }
+        });
+
+        ultimosReportesPorManzana = reportesManzanas;
+        ultimaFechaCompletoPorTerritorio = reportesTerritoriosCompletos;
+        refrescarEstilosMapa();
     });
 
     document.querySelectorAll('.filtro-chip').forEach(chip => {
@@ -359,7 +424,7 @@ export async function inicializarMapaYVisitas() {
                         direccion: nuevaDireccion,
                         motivo: nuevaNotaHoy || "Sin notas u observaciones especificadas.",
                         estado: "Pendiente",
-                        latitud: window.miUsuario.tempLat, // 🔥 SE ENVIAN LAS COORDENADAS AL SIERVO
+                        latitud: window.miUsuario.tempLat, 
                         longitud: window.miUsuario.tempLng,
                         timestamp: Date.now()
                     }, { merge: true });
@@ -378,7 +443,7 @@ export async function inicializarMapaYVisitas() {
                         direccion: nuevaDireccion,
                         motivo: nuevaNotaHoy || "El publicador solicita quitar este bloqueo.",
                         estado: "Pendiente_Eliminar", 
-                        latitud: window.miUsuario.tempLat, // 🔥 POR SI ACASO
+                        latitud: window.miUsuario.tempLat, 
                         longitud: window.miUsuario.tempLng,
                         timestamp: Date.now()
                     }, { merge: true });
@@ -455,6 +520,7 @@ export async function inicializarMapaYVisitas() {
 
             try {
                 const congIdLimpio = window.miUsuario.congregacionId.toString().trim();
+                // 🔥 Aseguráte de que acá diga "territorios" en tu base de datos 🔥
                 const snapshotReal = await getDocs(collection(db, "congregaciones", congIdLimpio, "territorios")); 
                 const bounds = new google.maps.LatLngBounds();
                 const centrosMacro = {};
@@ -485,7 +551,7 @@ export async function inicializarMapaYVisitas() {
                 const marcadoresMacro = [];
                 Object.keys(centrosMacro).forEach(t => {
                     const d = centrosMacro[t];
-                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: t, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
+                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: `T${t}`, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
                 });
 
                 window.mapaGlobal.addListener('zoom_changed', () => {
@@ -512,7 +578,7 @@ export async function inicializarMapaYVisitas() {
 
             renderizarVisitas();
             refrescarEstilosMapa(); 
-            renderizarAlertasGlobales(); // 🔥 Aseguramos que se dibujen al cargar el mapa
+            renderizarAlertasGlobales(); 
         };
         document.head.appendChild(scriptMapa);
     }
@@ -685,6 +751,131 @@ function inicializarBandejaSiervo() {
     }
 }
 
+// LÓGICA DE REGISTRO
+const btnAvanzar = document.getElementById('btn-avanzar-registro');
+if (btnAvanzar) {
+    btnAvanzar.onclick = async () => {
+        if (!window.manzanasSeleccionadas || window.manzanasSeleccionadas.size === 0) return;
+        
+        const m = document.createElement('div');
+        m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10050; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif; opacity: 0; transition: opacity 0.2s ease;';
+        
+        const numSelec = window.manzanasSeleccionadas.size;
+        const listaManzanas = Array.from(window.manzanasSeleccionadas).join(", ");
+        
+        m.innerHTML = `
+            <div style="background: var(--surface-color); width: 100%; max-width: 360px; border-radius: 28px; padding: 24px; box-shadow: 0 24px 48px rgba(0,0,0,0.4); border: 1px solid var(--border-color); transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);">
+                <h3 style="color: var(--text-color); margin: 0 0 12px 0; font-size: 20px;">Registro de Avance</h3>
+                <p style="color: var(--text-muted); font-size: 14px; margin: 0 0 16px 0;">Manzanas seleccionadas: <b>${numSelec}</b><br><span style="font-size: 12px; color: gray;">${listaManzanas}</span></p>
+                
+                <p style="color: var(--text-color); font-size: 15px; margin: 0 0 8px 0; font-weight: bold;">¿Se completó el territorio con este avance?</p>
+                
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <input type="radio" id="rad-comp" name="cobertura" value="Completo" style="accent-color: var(--primary-color); width: 18px; height: 18px;">
+                    <label for="rad-comp" style="color: var(--text-color); font-size: 15px; cursor: pointer;">Sí (Liberar todo)</label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                    <input type="radio" id="rad-parc" name="cobertura" value="Parcial" checked style="accent-color: var(--primary-color); width: 18px; height: 18px;">
+                    <label for="rad-parc" style="color: var(--text-color); font-size: 15px; cursor: pointer;">No (Parcial)</label>
+                </div>
+
+                <textarea id="notas-registro" placeholder="¿Qué faltó? / Notas" style="width: 100%; height: 80px; background: var(--bg-color); border: 1px solid var(--input-border); color: var(--text-color); padding: 12px; border-radius: 12px; margin-bottom: 24px; font-size: 14px; box-sizing: border-box; outline: none; resize: none;"></textarea>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button id="btn-cancelar-reg" style="background: transparent; border: none; color: var(--text-muted); font-weight: bold; padding: 10px 16px; border-radius: 12px; cursor: pointer; font-size: 15px;">Cancelar</button>
+                    <button id="btn-guardar-reg" style="background: var(--primary-color); color: white; border: none; font-weight: bold; padding: 10px 20px; border-radius: 12px; cursor: pointer; font-size: 15px;">Guardar Reporte</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(m); 
+        setTimeout(() => { m.style.opacity = '1'; m.children[0].style.transform = 'scale(1)'; }, 10);
+        
+        function cerrarModal() { m.style.opacity = '0'; m.children[0].style.transform = 'scale(0.95)'; setTimeout(() => m.remove(), 200); }
+        document.getElementById('btn-cancelar-reg').onclick = cerrarModal;
+        
+        document.getElementById('btn-guardar-reg').onclick = async () => {
+            const btn = document.getElementById('btn-guardar-reg');
+            btn.innerText = "Guardando..."; btn.disabled = true;
+            
+            const cobertura = document.querySelector('input[name="cobertura"]:checked').value;
+            const notas = document.getElementById('notas-registro').value.trim();
+            const manzanasAGuardar = Array.from(window.manzanasSeleccionadas);
+            const ahoraMillis = Date.now();
+            
+            const docId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ahoraMillis.toString();
+            
+            const data = {
+                fecha: ahoraMillis,
+                manzanas: manzanasAGuardar,
+                cobertura: cobertura,
+                notas: notas,
+                reportadoPor: window.miUsuario.nombre
+            };
+
+            try {
+                await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad", docId), data);
+                
+                const prefijosInvolucrados = [...new Set(manzanasAGuardar.map(m => m.split("-")[0].trim()))];
+                
+                for (const prefijo of prefijosInvolucrados) {
+                    const todasLasManzanasDelTerritorio = [];
+                    window.mapaGlobal.data.forEach(feature => {
+                        const t = feature.getProperty('territorio');
+                        const n = feature.getProperty('numero');
+                        if (t && n && n.toLowerCase() !== 'plaza') {
+                            const e = `T${t} - ${n}`;
+                            if (e.split('-')[0].trim() === prefijo) todasLasManzanasDelTerritorio.push(e);
+                        }
+                    });
+
+                    if (cobertura === "Completo") {
+                        for (const m of todasLasManzanasDelTerritorio) {
+                            await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas", m), { id: m, estaDisponible: true, asignadoA: "", fecha: 0 });
+                        }
+                    } else {
+                        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijo] || 0;
+                        const hechasEnCiclo = todasLasManzanasDelTerritorio.filter(m => {
+                            const f = ultimosReportesPorManzana[m] || 0;
+                            return f > fechaUltimoCompleto || manzanasAGuardar.includes(m);
+                        });
+                        
+                        if (hechasEnCiclo.length === todasLasManzanasDelTerritorio.length && todasLasManzanasDelTerritorio.length > 0) {
+                            for (const m of todasLasManzanasDelTerritorio) {
+                                await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas", m), { id: m, estaDisponible: true, asignadoA: "", fecha: 0 });
+                            }
+                            
+                            const docIdCierre = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + 1000).toString();
+                            const dataCierre = {
+                                fecha: ahoraMillis + 1000, 
+                                manzanas: todasLasManzanasDelTerritorio,
+                                cobertura: "Completo",
+                                notas: "Ciclo cerrado automáticamente (Suma de parciales)",
+                                reportadoPor: "Sistema Automático"
+                            };
+                            await setDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad", docIdCierre), dataCierre);
+                        }
+                    }
+                }
+
+                if(window.mostrarToastM3) window.mostrarToastM3("Reporte guardado", "success");
+                cerrarModal();
+                
+                window.modoRegistroActivo = false;
+                window.manzanasSeleccionadas.clear();
+                document.getElementById('registro-panel').style.display = 'none';
+                document.getElementById('fab-registro').style.display = 'flex';
+                refrescarEstilosMapa();
+
+            } catch(e) {
+                console.error(e);
+                if(window.mostrarToastM3) window.mostrarToastM3("Error al guardar", "error");
+                btn.innerText = "Guardar Reporte"; btn.disabled = false;
+            }
+        };
+    };
+}
+
 function manejarBorradoVisita(visita, nombreMostrar) {
     let mensajeExtra = "";
     if (visita.estado === 'No visitar' || visita.estado === 'Quitar de No Visitar') {
@@ -775,39 +966,6 @@ function renderizarVisitas() {
         visitasContainer.appendChild(card);
     });
 }
-
-function parsearNotasHistorial(notesRaw) {
-    if (!notesRaw || notesRaw.trim() === '') return [];
-    if (notesRaw.trim().startsWith("[")) { try { return JSON.parse(notesRaw); } catch(e) {} }
-    try {
-        return notesRaw.split("|||").map(str => {
-            const parts = str.split("&&&");
-            if (parts.length === 3) return { id: parts[0], fecha: parts[1], texto: parts[2].replace(/\/\/\//g, "\n") };
-            return null;
-        }).filter(Boolean);
-    } catch(e) { return [{ id: Date.now().toString(), fecha: "Historial Previo", texto: notesRaw }]; }
-}
-
-function empaquetarNotasHistorial(listaNotas) {
-    if (!listaNotas || listaNotas.length === 0) return "";
-    return listaNotas.map(nota => `${nota.id}&&&${nota.fecha}&&&${nota.texto.replace(/\n/g, "///")}`).join("|||");
-}
-
-function formatearFechaHoy() {
-    const meses = ["ene.","feb.","mar.","abr.","may.","jun.","jul.","ago.","sep.","oct.","nov.","dic."];
-    const d = new Date(); const dia = d.getDate().toString().padStart(2, '0'); const mes = meses[d.getMonth()];
-    const anio = d.getFullYear(); const hora = d.getHours().toString().padStart(2, '0'); const min = d.getMinutes().toString().padStart(2, '0');
-    return `${dia} ${mes} ${anio} - ${hora}:${min}`; 
-}
-
-window.comprobarCambiosAntesDeSalir = function() {
-    const gn = (id) => document.getElementById(id) ? document.getElementById(id).value.trim() : '';
-    if (gn('ficha-notas') || gn('ficha-publi') || gn('ficha-video') || gn('ficha-proximo')) return true;
-    if (window.datosOriginalesFicha) {
-        if (gn('ficha-nombre') !== window.datosOriginalesFicha.nombre || gn('ficha-apellido') !== window.datosOriginalesFicha.apellido || gn('ficha-estado') !== window.datosOriginalesFicha.estado || gn('ficha-direccion') !== window.datosOriginalesFicha.direccion) return true;
-    }
-    return false;
-};
 
 function abrirFichaVisita(visita) {
     window.miUsuario.visitaActivaId = visita.id; window.miUsuario.tempLat = visita.latitud || 0; window.miUsuario.tempLng = visita.longitud || 0;
@@ -930,134 +1088,4 @@ function abrirFichaVisita(visita) {
     }
     renderizarHistorial();
     if (gn('ficha-modal')) gn('ficha-modal').style.display = 'flex';
-}
-
-function mostrarModalEditarNota(textoActual, onGuardar) {
-    let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10005; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif;';
-    m.innerHTML = `
-        <div style="background: var(--surface-color); width: 100%; max-width: 360px; border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.4); border: 1px solid var(--border-color);">
-            <h3 style="color: var(--text-color); margin: 0 0 16px 0; font-size: 18px;">Editar Conversación</h3>
-            <textarea id="input-edit-nota" style="width: 100%; height: 140px; background: var(--bg-color); border: 1px solid var(--input-border); color: var(--text-color); padding: 14px; border-radius: var(--border-radius); margin-bottom: 24px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; resize: none;">${textoActual}</textarea>
-            <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                <button id="btn-cancelar-edit-nota" style="background: transparent; border: none; color: var(--primary-color); font-weight: bold; font-size: 15px; padding: 10px 16px; border-radius: var(--border-radius); cursor: pointer;">Cancelar</button>
-                <button id="btn-guardar-edit-nota" style="background: var(--primary-color); color: white; border: none; font-weight: bold; font-size: 15px; padding: 10px 20px; border-radius: var(--border-radius); cursor: pointer;">Guardar</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(m);
-    const inputNota = document.getElementById('input-edit-nota');
-    inputNota.addEventListener('focus', (e) => e.target.style.borderColor = 'var(--primary-color)');
-    inputNota.addEventListener('blur', (e) => e.target.style.borderColor = 'var(--input-border)');
-
-    document.getElementById('btn-cancelar-edit-nota').onclick = () => m.remove();
-    document.getElementById('btn-guardar-edit-nota').onclick = () => {
-        const nTexto = inputNota.value.trim(); if(!nTexto) return alert("La nota no puede quedar vacía.");
-        const btnGuardar = document.getElementById('btn-guardar-edit-nota'); btnGuardar.innerText = "Guardando..."; btnGuardar.disabled = true;
-        onGuardar(nTexto); m.remove();
-    };
-}
-
-window.mostrarModalConfirmacionGlobal = function(titulo, mensaje, txtConfirmar, colorConfirmar, onConfirm) {
-    let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10050; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif; opacity: 0; transition: opacity 0.2s ease;';
-    m.innerHTML = `
-        <div style="background: var(--surface-color); width: 100%; max-width: 320px; border-radius: 28px; padding: 24px; box-shadow: 0 24px 48px rgba(0,0,0,0.4); border: 1px solid var(--border-color); text-align: center; transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);">
-            <div style="font-size: 42px; margin-bottom: 16px;">⚠️</div><h3 style="color: var(--text-color); margin: 0 0 12px 0; font-size: 20px;">${titulo}</h3>
-            <p style="color: var(--text-muted); font-size: 15px; margin: 0 0 28px 0; line-height: 1.5;">${mensaje}</p>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button id="btn-accion-confirm-global" style="background: ${colorConfirmar}; color: white; border: none; font-weight: bold; padding: 16px; border-radius: 16px; cursor: pointer; font-size: 16px;">${txtConfirmar}</button>
-                <button id="btn-cancelar-confirm-global" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-color); font-weight: bold; padding: 16px; border-radius: 16px; cursor: pointer; font-size: 16px;">Cancelar</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(m); setTimeout(() => { m.style.opacity = '1'; m.children[0].style.transform = 'scale(1)'; }, 10);
-    function cerrarModal() { m.style.opacity = '0'; m.children[0].style.transform = 'scale(0.95)'; setTimeout(() => m.remove(), 200); }
-    document.getElementById('btn-cancelar-confirm-global').onclick = cerrarModal;
-    document.getElementById('btn-accion-confirm-global').onclick = () => { cerrarModal(); onConfirm(); };
-};
-
-window.mostrarModalCambiosSinGuardar = function(onGuardar, onSalir) {
-    let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10060; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; font-family: sans-serif; opacity: 0; transition: opacity 0.2s ease;';
-    m.innerHTML = `
-        <div style="background: var(--surface-color); width: 100%; max-width: 340px; border-radius: 28px; padding: 24px; box-shadow: 0 24px 48px rgba(0,0,0,0.4); border: 1px solid var(--border-color); text-align: center; transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);">
-            <div style="font-size: 42px; margin-bottom: 16px;">💾</div><h3 style="color: var(--text-color); margin: 0 0 12px 0; font-size: 20px;">Cambios sin guardar</h3>
-            <p style="color: var(--text-muted); font-size: 15px; margin: 0 0 28px 0; line-height: 1.5;">Tienes información nueva en esta visita. ¿Qué deseas hacer?</p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button id="btn-modal-guardar" style="background: var(--primary-color); color: white; border: none; font-weight: bold; padding: 16px; border-radius: 16px; cursor: pointer; font-size: 16px; transition: opacity 0.2s;">Guardar cambios</button>
-                <button id="btn-modal-salir" style="background: transparent; border: 1px solid var(--error-text); color: var(--error-text); font-weight: bold; padding: 16px; border-radius: 16px; cursor: pointer; font-size: 16px; transition: opacity 0.2s;">Salir sin guardar</button>
-                <button id="btn-modal-cancelar" style="background: transparent; border: none; color: var(--text-muted); font-weight: bold; padding: 12px; border-radius: 16px; cursor: pointer; font-size: 15px;">Cancelar</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(m); setTimeout(() => { m.style.opacity = '1'; m.children[0].style.transform = 'scale(1)'; }, 10);
-    function cerrarModal() { m.style.opacity = '0'; m.children[0].style.transform = 'scale(0.95)'; setTimeout(() => m.remove(), 200); }
-    document.getElementById('btn-modal-cancelar').onclick = cerrarModal;
-    document.getElementById('btn-modal-guardar').onclick = () => { cerrarModal(); if(onGuardar) onGuardar(); };
-    document.getElementById('btn-modal-salir').onclick = () => { cerrarModal(); if(onSalir) onSalir(); };
-};
-
-window.mostrarToastM3 = function(mensaje, tipo = 'success') {
-    const bg = tipo === 'error' ? 'var(--error-text)' : '#4CAF50';
-    const icon = tipo === 'error' ? '❌' : '✅';
-    
-    const toastViejo = document.getElementById('toast-m3');
-    if (toastViejo) toastViejo.remove();
-
-    const toast = document.createElement('div');
-    toast.id = 'toast-m3';
-    toast.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: ${bg}; color: white; padding: 12px 24px; border-radius: 50px; font-family: sans-serif; font-size: 14px; font-weight: bold; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 11000; display: flex; align-items: center; gap: 10px; opacity: 0; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); width: max-content; max-width: 90%; pointer-events: none;`;
-    toast.innerHTML = `<span style="font-size: 18px;">${icon}</span> <span>${mensaje}</span>`;
-    
-    document.body.appendChild(toast);
-    
-    setTimeout(() => { toast.style.transform = 'translateX(-50%) translateY(0)'; toast.style.opacity = '1'; }, 10);
-    setTimeout(() => { 
-        toast.style.transform = 'translateX(-50%) translateY(100px)'; toast.style.opacity = '0'; 
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
-};
-
-function abrirNavegadorGPS(lat, lng) {
-    if (!lat || !lng) {
-        if(window.mostrarToastM3) window.mostrarToastM3("No hay coordenadas exactas para esta visita.", "error");
-        return;
-    }
-    let m = document.createElement('div');
-    m.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-overlay); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10020; display: flex; align-items: flex-end; justify-content: center; font-family: sans-serif;';
-    m.innerHTML = `
-        <div style="background: var(--surface-color); width: 100%; max-width: 480px; border-radius: 28px 28px 0 0; padding: 24px 24px 36px 24px; box-shadow: 0 -8px 40px rgba(0,0,0,0.4); border-top: 1px solid var(--border-color); animation: slideUpNav 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);">
-            <div style="width: 40px; height: 5px; background: var(--border-color); border-radius: 3px; margin: 0 auto 24px auto;"></div>
-            <h3 style="color: var(--text-color); margin: 0 0 20px 0; font-size: 20px; text-align: center;">¿Cómo quieres llegar?</h3>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button id="btn-nav-maps" style="background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 16px; border-radius: 16px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 16px; transition: opacity 0.2s;"><span style="font-size: 24px;">🗺️</span> Google Maps</button>
-                <button id="btn-nav-waze" style="background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 16px; border-radius: 16px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 16px; transition: opacity 0.2s;"><span style="font-size: 24px;">🚗</span> Waze</button>
-                <button id="btn-nav-apple" style="background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 16px; border-radius: 16px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 16px; transition: opacity 0.2s;"><span style="font-size: 24px;">🍎</span> Apple Maps</button>
-            </div>
-            <button id="btn-cancelar-nav" style="width: 100%; background: transparent; border: none; color: var(--text-muted); font-weight: bold; font-size: 16px; padding: 20px 16px 0 16px; margin-top: 8px; cursor: pointer;">Cancelar</button>
-        </div>
-    `;
-    
-    if (!document.getElementById('anim-slide-up-nav')) {
-        const style = document.createElement('style'); style.id = 'anim-slide-up-nav';
-        style.innerHTML = `@keyframes slideUpNav { from { transform: translateY(100%); } to { transform: translateY(0); } }`;
-        document.head.appendChild(style);
-    }
-    document.body.appendChild(m);
-
-    const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (!isApple) document.getElementById('btn-nav-apple').style.display = 'none';
-
-    document.getElementById('btn-cancelar-nav').onclick = () => m.remove();
-    
-    document.getElementById('btn-nav-maps').onclick = () => {
-        window.open(`http://googleusercontent.com/maps.google.com/maps?daddr=${lat},${lng}`, '_blank'); m.remove();
-    };
-    document.getElementById('btn-nav-waze').onclick = () => {
-        window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank'); m.remove();
-    };
-    document.getElementById('btn-nav-apple').onclick = () => {
-        window.open(`http://maps.apple.com/?daddr=${lat},${lng}`, '_blank'); m.remove();
-    };
 }
