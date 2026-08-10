@@ -183,7 +183,7 @@ function limpiarMemoriaReloj() {
     localStorage.setItem('crono_pausa', '0');
     detenerBucleReloj();
     iconoCrono.innerText = "▶️";
-    textoCrono.innerText = "Predicar";
+    textoCrono.innerText = "Comenzar a predicar";
 }
 
 function renderizarTiempo(ms) {
