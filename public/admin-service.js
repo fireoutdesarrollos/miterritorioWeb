@@ -100,7 +100,7 @@ export function configurarPanelAdmin() {
         });
     }
 
-    // ==========================================
+   // ==========================================
     // PESTAÑAS INTERNAS DE SERVICIO
     // ==========================================
     const adminDashboard = document.getElementById('admin-dashboard');
@@ -109,6 +109,31 @@ export function configurarPanelAdmin() {
     const viewRoles = document.getElementById('admin-roles-view');
 
     document.querySelectorAll('.btn-volver-admin').forEach(btn => btn.onclick = () => history.back());
+
+    // 🔥 EL VIGILANTE DEL HISTORIAL (Comportamiento Nativo) 🔥
+    window.addEventListener('popstate', (event) => {
+        const state = event.state;
+
+        // 1. Apagamos el modal si retrocedimos
+        const asignarModal = document.getElementById('asignar-modal');
+        if (!state || state.page !== 'modal_asignar') {
+            if (asignarModal) asignarModal.style.display = 'none';
+        }
+
+        // 2. Apagamos las sub-pantallas si retrocedimos al panel
+        if (!state || state.page !== 'admin_sub') {
+            if (viewInventario) viewInventario.style.display = 'none';
+            if (viewReportes) viewReportes.style.display = 'none';
+            if (viewRoles) viewRoles.style.display = 'none';
+            
+            const viewBandeja = document.getElementById('admin-solicitudes-view');
+            const barraActionInv = document.getElementById('barra-accion-inventario');
+            if (viewBandeja) viewBandeja.style.display = 'none';
+            if (barraActionInv) barraActionInv.style.display = 'none';
+
+            if (adminDashboard) adminDashboard.style.display = 'flex';
+        }
+    });
 
     // -----------------------------------------------------------
     // 1. REPORTES, ESTADÍSTICAS Y PDF S-13
@@ -122,8 +147,6 @@ export function configurarPanelAdmin() {
             history.pushState({ page: 'admin_sub' }, '', '');
             
             // Declaramos las vistas de forma segura
-            const adminDashboard = document.getElementById('admin-dashboard');
-            const viewReportes = document.getElementById('admin-reportes-view');
             
             if (adminDashboard) adminDashboard.style.display = 'none'; 
             if (viewReportes) viewReportes.style.display = 'block';
@@ -346,8 +369,7 @@ export function configurarPanelAdmin() {
     }
 
     function renderizarReportesFiltrados() {
-        try {
-            const listaHtml = document.getElementById('lista-reportes'); 
+        try { 
             if (!listaHtml) return;
             listaHtml.innerHTML = '';
             

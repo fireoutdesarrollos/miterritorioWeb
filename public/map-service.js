@@ -737,17 +737,16 @@ function inicializarBandejaSiervo() {
         });
     }
 
+// 🔥 BANDEJA ALINEADA AL HISTORIAL NATIVO 🔥
     btnBandeja.onclick = () => {
+        history.pushState({ page: 'admin_sub' }, '', ''); // Avisamos que avanzamos
         document.getElementById('admin-dashboard').style.display = 'none';
         vistaBandeja.style.display = 'block';
     };
 
     const btnVolver = vistaBandeja.querySelector('.btn-volver-admin');
     if (btnVolver) {
-        btnVolver.onclick = () => {
-            vistaBandeja.style.display = 'none';
-            document.getElementById('admin-dashboard').style.display = 'flex';
-        };
+        btnVolver.onclick = () => history.back(); // El vigilante hará el resto
     }
 }
 
