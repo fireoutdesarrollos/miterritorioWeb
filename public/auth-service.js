@@ -710,6 +710,7 @@ function activarVigilanteRealtime(email, congId, nombreCompleto) {
             toggleContenidoApp(true);
 
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRolActual, congregacionId: congId, congregacionNombre: congData.nombre || '' };
+            if (window.activarDashboardMinisterio) window.activarDashboardMinisterio();
 
             aplicarCandadoPrivacidad(miRolActual);
 

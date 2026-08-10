@@ -4,12 +4,19 @@
 import { iniciarControladorUI } from "./ui-controller.js";
 import { iniciarAutenticacion } from "./auth-service.js";
 import { inicializarGuias } from "./guide-service.js";
+import { inicializarMinisterio, escucharHorasMensuales } from "./ministerio-service.js";
 
 console.log("🚀 MOTOR JS MODULAR (VERSIÓN 200 - ARQUITECTURA LIMPIA) CARGADO");
 
 iniciarControladorUI();
 iniciarAutenticacion();
+inicializarMinisterio(); // Inicializa los botones del reloj
+
 if (typeof inicializarGuias === 'function') inicializarGuias();
+
+// Exportamos la función de escucharFirebase para que 'auth-service.js' la llame 
+// justo después de que el usuario inicia sesión con éxito.
+window.activarDashboardMinisterio = escucharHorasMensuales;
 
 // ========================================================
 // ESCUDO DE NAVEGACIÓN M3 (BOTÓN ATRÁS NATIVO DEL CELULAR)
