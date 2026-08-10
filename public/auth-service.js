@@ -8,6 +8,7 @@ import { auth, provider, db } from "./firebase-core.js";
 import { inicializarMapaYVisitas } from "./map-service.js";
 import { configurarPanelAdmin } from "./admin-service.js";
 import { aplicarCandadoPrivacidad } from "./ui-controller.js";
+import { escucharHorasMensuales } from "./ministerio-service.js";
 
 const WEB_VERSION = "v1.7.9"; 
 
@@ -710,7 +711,7 @@ function activarVigilanteRealtime(email, congId, nombreCompleto) {
             toggleContenidoApp(true);
 
             window.miUsuario = { email, nombre: nombreCompleto, rol: miRolActual, congregacionId: congId, congregacionNombre: congData.nombre || '' };
-            if (window.activarDashboardMinisterio) window.activarDashboardMinisterio();
+            escucharHorasMensuales();
 
             aplicarCandadoPrivacidad(miRolActual);
 

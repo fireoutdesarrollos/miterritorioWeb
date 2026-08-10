@@ -13,10 +13,16 @@ iniciarAutenticacion();
 inicializarMinisterio(); // Inicializa los botones del reloj
 
 if (typeof inicializarGuias === 'function') inicializarGuias();
+// 🔥 BOTÓN DE AYUDA (ABRE LAS GUÍAS MANUALMENTE) 🔥
+    const btnAyuda = document.querySelector('.icon-help') || document.getElementById('btn-ayuda-web');
+    if (btnAyuda) {
+        btnAyuda.onclick = () => {
+            if (typeof inicializarGuias === 'function') {
+                inicializarGuias(true); // El "true" fuerza a que se abra aunque ya la haya visto
+            }
+        };
+    }
 
-// Exportamos la función de escucharFirebase para que 'auth-service.js' la llame 
-// justo después de que el usuario inicia sesión con éxito.
-window.activarDashboardMinisterio = escucharHorasMensuales;
 
 // ========================================================
 // ESCUDO DE NAVEGACIÓN M3 (BOTÓN ATRÁS NATIVO DEL CELULAR)
