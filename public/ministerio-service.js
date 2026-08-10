@@ -451,7 +451,20 @@ function renderizarHistorialHoras() {
 function actualizarDashboard() {
     const horasElement = document.getElementById('horas-totales-mes');
     const porcentajeElement = document.getElementById('porcentaje-meta');
+    const textoMetaActual = document.getElementById('texto-meta-actual'); // El texto debajo de las horas
     
+    // 🔥 LEE LA META EN VIVO DIRECTAMENTE DE LA MEMORIA 🔥
+    const metaDinamica = parseInt(localStorage.getItem('meta_horas')) || 0;
+
+    // Actualiza el texto para que diga "Meta: 30 hs" en vez de "Sin meta fija"
+    if (textoMetaActual) {
+        if (metaDinamica === 0) textoMetaActual.innerText = "Sin meta fija";
+        else if (metaDinamica === 15) textoMetaActual.innerText = "Meta: 15 hs";
+        else if (metaDinamica === 30) textoMetaActual.innerText = "Meta: 30 hs";
+        else if (metaDinamica === 50) textoMetaActual.innerText = "Meta: 50 hs";
+        else textoMetaActual.innerText = `Meta: ${metaDinamica} hs`;
+    }
+
     if (horasElement) {
         const horas = Math.floor(totalMilisegundosMes / (1000 * 60 * 60));
         const minutos = Math.floor((totalMilisegundosMes / (1000 * 60)) % 60);
@@ -460,9 +473,9 @@ function actualizarDashboard() {
 
     if (porcentajeElement) {
         let porcentaje = 0;
-        if (metaHoras > 0) {
+        if (metaDinamica > 0) {
             const horasDecimales = totalMilisegundosMes / (1000 * 60 * 60);
-            porcentaje = Math.min(Math.round((horasDecimales / metaHoras) * 100), 100);
+            porcentaje = Math.min(Math.round((horasDecimales / metaDinamica) * 100), 100);
         } else {
             porcentaje = 100;
         }

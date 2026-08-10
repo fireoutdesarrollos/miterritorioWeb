@@ -237,6 +237,20 @@ async function mostrarPantallaPerfil() {
                     </div>
                 </div>
 
+                <div style="background: var(--bg-color); border-radius: 20px; padding: 20px; border: 1px solid var(--border-color); flex-shrink: 0;">
+                    <h3 style="color: var(--text-color); margin: 0 0 12px 0; font-size: 16px;">🎯 Mi Meta de Predicación</h3>
+                    <select id="select-meta-horas" style="width: 100%; padding: 12px; border-radius: 8px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); margin-bottom: 10px; font-size: 14px; outline: none;">
+                        <option value="0">Sin meta fija</option>
+                        <option value="15">Precursor Auxiliar (15 hs)</option>
+                        <option value="30">Precursor Auxiliar (30 hs)</option>
+                        <option value="50">Precursor Regular (50 hs)</option>
+                        <option value="-1">Meta personalizada...</option>
+                    </select>
+                    <div id="caja-meta-personalizada" style="display: none; margin-bottom: 10px;">
+                        <input type="number" id="input-meta-personalizada" placeholder="Ej: 20 hs" style="width: 100%; padding: 12px; border-radius: 8px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-sizing: border-box; font-size: 14px; outline: none;">
+                    </div>                    
+                </div>
+
                 <div style="display: flex; flex-direction: column; background: var(--bg-color, #25242C); border-radius: 20px; overflow: hidden; border: 1px solid var(--border-color, rgba(255,255,255,0.04)); flex-shrink: 0;">
                     <div class="perfil-opcion" id="opc-editar-datos" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04)); display: flex; align-items: center; cursor: pointer; transition: opacity 0.2s;">
                         <span style="margin-right: 16px; font-size: 18px;">✏️</span>
@@ -271,6 +285,55 @@ async function mostrarPantallaPerfil() {
 
     document.body.appendChild(modal);
 
+    // 🔥 1. BOTÓN CERRAR PERFIL BLINDADO 🔥
+    modal.querySelector('#btn-cerrar-perfil').onclick = () => modal.remove();
+
+   
+// 🔥 2. LÓGICA DE LA META DE HORAS (AUTO-GUARDADO) 🔥
+    const selectMeta = modal.querySelector('#select-meta-horas');
+    const cajaMetaPersonalizada = modal.querySelector('#caja-meta-personalizada');
+    const inputMetaPersonalizada = modal.querySelector('#input-meta-personalizada');
+
+    if (selectMeta) {
+        let metaActual = parseInt(localStorage.getItem('meta_horas')) || 0;
+
+        selectMeta.value = metaActual > 0 && ![15, 30, 50].includes(metaActual) ? "-1" : metaActual.toString();
+        if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = selectMeta.value === "-1" ? 'block' : 'none';
+        if (selectMeta.value === "-1" && inputMetaPersonalizada) inputMetaPersonalizada.value = metaActual;
+
+        // Función que guarda y avisa a la tarjeta principal
+        function guardarMetaYRefrescar(valor) {
+            localStorage.setItem('meta_horas', valor.toString());
+            if (typeof escucharHorasMensuales === 'function') escucharHorasMensuales(); 
+            if (window.mostrarToastM3) window.mostrarToastM3("Meta guardada", "success");
+        }
+
+        // Se guarda automáticamente al cambiar la opción
+        selectMeta.onchange = (e) => {
+            const val = e.target.value;
+            if (val === "-1") {
+                if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = 'block';
+                if (inputMetaPersonalizada) inputMetaPersonalizada.focus();
+            } else {
+                if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = 'none';
+                guardarMetaYRefrescar(parseInt(val) || 0);
+            }
+        };
+
+        // Si es personalizada, se guarda al dejar de escribir (perder el foco)
+        if (inputMetaPersonalizada) {
+            inputMetaPersonalizada.onblur = (e) => {
+                const val = parseInt(e.target.value) || 0;
+                guardarMetaYRefrescar(val);
+            };
+            // También se guarda si aprieta Enter en el teclado
+            inputMetaPersonalizada.onkeyup = (e) => {
+                if (e.key === 'Enter') inputMetaPersonalizada.blur();
+            };
+        }
+    }
+
+    // Funciones de compresión e imagen
     function comprimirImagen(file, maxWithOrHeight = 700) {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -292,31 +355,31 @@ async function mostrarPantallaPerfil() {
         });
     }
 
-    document.getElementById('btn-cerrar-perfil').onclick = () => modal.remove();
-
-    const contenedorAvatar = document.getElementById('contenedor-avatar');
-    const inputFoto = document.getElementById('input-foto-perfil');
-    contenedorAvatar.onclick = () => inputFoto.click();
+    const contenedorAvatar = modal.querySelector('#contenedor-avatar');
+    const inputFoto = modal.querySelector('#input-foto-perfil');
+    if (contenedorAvatar) contenedorAvatar.onclick = () => inputFoto.click();
     
-    inputFoto.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        contenedorAvatar.innerHTML = `<span style="font-size:13px; color:white; font-weight:bold;">Subiendo...</span>`;
-        try {
-            const blobComprimido = await comprimirImagen(file);
-            const storageRef = ref(storage, `usuarios/${window.miUsuario.email}/avatar.jpg`);
-            await uploadBytes(storageRef, blobComprimido);
-            const downloadUrl = await getDownloadURL(storageRef);
-            await setDoc(doc(db, "usuarios", window.miUsuario.email), { fotoPerfil: downloadUrl }, { merge: true });
-            contenedorAvatar.innerHTML = `<img src="${downloadUrl}" style="width:100%; height:100%; object-fit:cover;"><div style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: white;">📷</div>`;
-            const btnPrincipal = document.getElementById('btn-flotante-perfil');
-            if(btnPrincipal) btnPrincipal.innerHTML = `<img src="${downloadUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
-        } catch(err) {
-            alert("Error al subir: " + err.message); modal.remove(); mostrarPantallaPerfil();
-        }
-    };
+    if (inputFoto) {
+        inputFoto.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            contenedorAvatar.innerHTML = `<span style="font-size:13px; color:white; font-weight:bold;">Subiendo...</span>`;
+            try {
+                const blobComprimido = await comprimirImagen(file);
+                const storageRef = ref(storage, `usuarios/${window.miUsuario.email}/avatar.jpg`);
+                await uploadBytes(storageRef, blobComprimido);
+                const downloadUrl = await getDownloadURL(storageRef);
+                await setDoc(doc(db, "usuarios", window.miUsuario.email), { fotoPerfil: downloadUrl }, { merge: true });
+                contenedorAvatar.innerHTML = `<img src="${downloadUrl}" style="width:100%; height:100%; object-fit:cover;"><div style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: white;">📷</div>`;
+                const btnPrincipal = document.getElementById('btn-flotante-perfil');
+                if(btnPrincipal) btnPrincipal.innerHTML = `<img src="${downloadUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            } catch(err) {
+                alert("Error al subir: " + err.message); modal.remove(); mostrarPantallaPerfil();
+            }
+        };
+    }
 
-    document.getElementById('opc-editar-datos').onclick = () => {
+    modal.querySelector('#opc-editar-datos').onclick = () => {
         const partes = window.miUsuario.nombre.split(' ');
         const viejoNombre = partes[0] || '';
         const viejoApellido = partes.slice(1).join(' ') || '';
@@ -331,29 +394,29 @@ async function mostrarPantallaPerfil() {
         });
     };
 
-    document.getElementById('opc-tema').onclick = () => {
+    modal.querySelector('#opc-tema').onclick = () => {
         const temas = ['system', 'light', 'dark'];
         temaActual = temas[(temas.indexOf(temaActual) + 1) % temas.length];
         localStorage.setItem('themePref', temaActual);
         if (temaActual === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
         else if (temaActual === 'light') document.documentElement.setAttribute('data-theme', 'light');
         else document.documentElement.removeAttribute('data-theme');
-        document.getElementById('txt-tema-actual').innerText = `Tema: ${opcionesTemasTextos[temaActual]}`;
+        modal.querySelector('#txt-tema-actual').innerText = `Tema: ${opcionesTemasTextos[temaActual]}`;
     };
 
-    document.getElementById('opc-cambiar-cong').onclick = () => {
+    modal.querySelector('#opc-cambiar-cong').onclick = () => {
         mostrarModalConfirmacion("¿Cambiar de congregación?", "Si sales de tu congregación actual, tu rol se perderá y volverás a la sala de espera al unirte a una nueva. ¿Estás seguro?", "Sí, salir", "var(--error-text)", () => {
             localStorage.removeItem('miCongregacionId'); location.reload();
         });
     };
 
-    document.getElementById('opc-cerrar-sesion').onclick = () => {
+    modal.querySelector('#opc-cerrar-sesion').onclick = () => {
         mostrarModalConfirmacion("¿Cerrar sesión?", "¿Seguro que deseas cerrar tu sesión en este dispositivo?", "Cerrar sesión", "var(--error-text)", async () => {
             await signOut(auth); modal.remove(); location.reload();
         });
     };
 
-    document.getElementById('opc-reportar').onclick = () => abrirModalReporteAvanzado();
+    modal.querySelector('#opc-reportar').onclick = () => abrirModalReporteAvanzado();
 }
 
 function mostrarModalEditarDatos(nombreActual, apellidoActual, onGuardar) {
