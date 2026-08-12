@@ -352,3 +352,16 @@ button:active { opacity: 0.8; }
 }
 .autocomplete-item:last-child { border-bottom: none; }
 .autocomplete-item:hover, .autocomplete-item:active { background: var(--bg-color); }
+
+/* =========================================
+   PIN DE FRONTERA (Cartel Azul)
+   ========================================= */
+.cartel-frontera {
+    background-color: #1565C0;
+    color: white !important;
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 12px;
+    text-shadow: none; /* Quitamos la sombra blanca de los otros pines */
+}

@@ -2,6 +2,17 @@
 // ARCHIVO: map-helpers.js (Utilidades y Matemática)
 // ==========================================
 
+import { 
+    oscurecerColorWeb, obtenerColorPin, normalizarTexto, configurarAutocomplete, 
+    parsearNotasHistorial, empaquetarNotasHistorial, formatearFechaHoy, obtenerMedioDelBordeMasLargo 
+} from "./map-helpers.js";
+
+window.mapaGlobal = null;
+window.pinesVisitas = [];
+let pinesAlertasGlobales = []; 
+let limitesGlobalesMap = []; // 🔥 MEMORIA PARA LOS GRANDES BORDES 🔥
+let filtroActual = 'Todos';
+
 export function oscurecerColorWeb(hexColor) {
     if (!hexColor || !hexColor.startsWith('#')) return '#424242';
     let r = parseInt(hexColor.slice(1, 3), 16);
@@ -105,4 +116,31 @@ export function formatearFechaHoy() {
     const d = new Date(); const dia = d.getDate().toString().padStart(2, '0'); const mes = meses[d.getMonth()];
     const anio = d.getFullYear(); const hora = d.getHours().toString().padStart(2, '0'); const min = d.getMinutes().toString().padStart(2, '0');
     return `${dia} ${mes} ${anio} - ${hora}:${min}`; 
+}
+export function obtenerMedioDelBordeMasLargo(coordenadas) {
+    if (!coordenadas || coordenadas.length === 0) return { lat: 0, lng: 0 };
+    if (coordenadas.length === 1) return coordenadas[0];
+
+    let maxDistancia = -1;
+    let mejorMedio = coordenadas[0];
+
+    for (let i = 0; i < coordenadas.length; i++) {
+        let p1 = coordenadas[i];
+        let p2 = coordenadas[(i + 1) % coordenadas.length];
+        
+        let point1 = new google.maps.LatLng(p1.lat, p1.lng);
+        let point2 = new google.maps.LatLng(p2.lat, p2.lng);
+        
+        // Usamos la API nativa de Google Maps para calcular distancia
+        let distancia = google.maps.geometry.spherical.computeDistanceBetween(point1, point2);
+
+        if (distancia > maxDistancia) {
+            maxDistancia = distancia;
+            mejorMedio = {
+                lat: (p1.lat + p2.lat) / 2.0,
+                lng: (p1.lng + p2.lng) / 2.0
+            };
+        }
+    }
+    return mejorMedio;
 }

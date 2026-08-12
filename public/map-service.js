@@ -108,7 +108,7 @@ export function refrescarEstilosMapa() {
             fillColor = oscurecerColorWeb(fillColor); fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
         }
 
-        return { fillColor, strokeColor, strokeWeight, fillOpacity };
+        return { fillColor, strokeColor, strokeWeight, fillOpacity, zIndex: 1 };
     });
 
     for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
@@ -496,7 +496,7 @@ export async function inicializarMapaYVisitas() {
     const llaveSnap = await getDoc(doc(db, "configuracion", "ApiKeys"));
     if (llaveSnap.exists()) {
         const scriptMapa = document.createElement('script');
-        scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}`;
+       scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}&libraries=geometry`;
         scriptMapa.async = true;
         
         scriptMapa.onload = async () => {
@@ -525,14 +525,80 @@ export async function inicializarMapaYVisitas() {
                 const bounds = new google.maps.LatLngBounds();
                 const centrosMacro = {};
 
+                limitesGlobalesMap = []; // Limpiamos la memoria antes de leer
+                const rol = window.miUsuario.rol;
+                const esAdmin = rol === "siervo" || rol === "ayudante";
+
                 for (let documento of snapshotReal.docs) {
                     try {
                         const jsonString = documento.data().geojson;
                         if (!jsonString) continue;
-                        window.mapaGlobal.data.addGeoJson(JSON.parse(jsonString));
-                    } catch(e){}
+                        
+                        const docId = documento.id.toLowerCase();
+                        const parsedGeoJson = JSON.parse(jsonString);
+
+                        // 🔥 REGLA DE PREFIJOS (FRONTERAS VS MANZANAS) 🔥
+                        if (docId.startsWith("limite_") || docId.startsWith("admin_")) {
+                            const esVisible = docId.startsWith("limite_") || (docId.startsWith("admin_") && esAdmin);
+                            
+                            if (esVisible) {
+                                // 1. Dibujamos la línea azul en una capa separada (de fondo)
+                                const layerBorde = new google.maps.Data({ map: window.mapaGlobal });
+                                layerBorde.addGeoJson(parsedGeoJson);
+                                layerBorde.setStyle({
+                                    fillColor: 'transparent',
+                                    strokeColor: '#1565C0',
+                                    strokeWeight: 6,
+                                    zIndex: 0,
+                                    clickable: false
+                                });
+
+                                // 2. Calculamos el cartel y lo guardamos
+                                const featuresArray = parsedGeoJson.features || [];
+                                if (featuresArray.length > 0) {
+                                    const feature = featuresArray[0];
+                                    const geometry = feature.geometry;
+                                    
+                                    if (geometry && geometry.type === "Polygon") {
+                                        const coordsArray = geometry.coordinates[0];
+                                        const polyPoints = coordsArray.map(p => ({ lng: p[0], lat: p[1] }));
+                                        
+                                        const properties = feature.properties || {};
+                                        let nombreFrontera = properties.nombre || properties.name || "";
+                                        
+                                        if (!nombreFrontera) {
+                                            const nombreLimpio = docId.replace("limite_", "").replace("admin_", "").replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                                            nombreFrontera = docId.startsWith("admin_") ? `⚙️ ${nombreLimpio} (Oculto)` : `📍 ${nombreLimpio}`;
+                                        }
+
+                                        const puntoBorde = obtenerMedioDelBordeMasLargo(polyPoints);
+                                        
+                                        // 3. Creamos el Cartel incrustado en la línea
+                                        const mCartel = new google.maps.Marker({
+                                            position: puntoBorde,
+                                            label: { 
+                                                text: nombreFrontera.toUpperCase(), 
+                                                color: 'white', 
+                                                fontWeight: 'bold', 
+                                                fontSize: '12px', 
+                                                className: 'cartel-frontera'
+                                            },
+                                            icon: { url: "", scaledSize: new google.maps.Size(0,0) },
+                                            zIndex: 1,
+                                            clickable: false
+                                        });
+                                        
+                                        limitesGlobalesMap.push(mCartel);
+                                    }
+                                }
+                            }
+                        } else {
+                            // ES UNA MANZANA NORMAL
+                            window.mapaGlobal.data.addGeoJson(parsedGeoJson);
+                        }
+                    } catch(e) { console.error("Error parseando", e) }
                 }
-                
+
                 window.mapaGlobal.data.forEach(feature => {
                     const fBounds = new google.maps.LatLngBounds(); feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
                     const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
@@ -553,9 +619,10 @@ export async function inicializarMapaYVisitas() {
                     const d = centrosMacro[t];
                     marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: `T${t}`, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
                 });
-
-                window.mapaGlobal.addListener('zoom_changed', () => {
+window.mapaGlobal.addListener('zoom_changed', () => {
                     const z = window.mapaGlobal.getZoom();
+                    
+                    // LÓGICA DE MANZANAS (Original)
                     if (z >= 15.5) { 
                         Object.values(marcadoresMicroMap).forEach(m => m.setMap(window.mapaGlobal)); 
                         marcadoresMacro.forEach(m => m.setMap(null)); 
@@ -567,6 +634,14 @@ export async function inicializarMapaYVisitas() {
                     else { 
                         Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
                         marcadoresMacro.forEach(m => m.setMap(null)); 
+                    }
+
+                    // 🔥 LÓGICA DE CARTELES DE FRONTERA 🔥
+                    // Se ocultan cuando el zoom >= 14 (como en Android)
+                    if (z < 14) {
+                        limitesGlobalesMap.forEach(m => m.setMap(window.mapaGlobal));
+                    } else {
+                        limitesGlobalesMap.forEach(m => m.setMap(null));
                     }
                 });
 
