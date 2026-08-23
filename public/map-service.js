@@ -96,7 +96,8 @@ export function refrescarEstilosMapa() {
         const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
         const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
 
-        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica;
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
+
 
         if (window.modoRegistroActivo && estaSeleccionadaParaRegistro) {
             fillColor = '#6200EE'; fillOpacity = 0.5; strokeColor = 'white'; strokeWeight = 3;
@@ -133,7 +134,8 @@ export function refrescarEstilosMapa() {
         const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
         const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
 
-        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica;
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
+
 
         let textoExtra = "";
         if (mostrarProgreso && (puedeVerOcupacion || esMio)) {
