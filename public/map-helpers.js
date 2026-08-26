@@ -2,11 +2,6 @@
 // ARCHIVO: map-helpers.js (Utilidades y Matemática)
 // ==========================================
 
-import { 
-    oscurecerColorWeb, obtenerColorPin, normalizarTexto, configurarAutocomplete, 
-    parsearNotasHistorial, empaquetarNotasHistorial, formatearFechaHoy, obtenerMedioDelBordeMasLargo 
-} from "./map-helpers.js";
-
 window.mapaGlobal = null;
 window.pinesVisitas = [];
 let pinesAlertasGlobales = []; 
