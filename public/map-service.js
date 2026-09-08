@@ -539,16 +539,34 @@ function inicializarBandejaSiervo() {
     const listaSolicitudes = document.getElementById('lista-solicitudes');
     const listaActivos = document.getElementById('lista-bloqueos-activos');
     const badge = document.getElementById('badge-solicitudes');
+    const btnSugerencias = document.getElementById('btn-admin-sugerencias');
 
     if (!btnBandeja || !vistaBandeja || !listaSolicitudes) return;
 
+    // 1. Filtro de seguridad
     if (window.miUsuario.rol !== 'siervo' && window.miUsuario.rol !== 'ayudante') {
         btnBandeja.style.display = 'none';
         return;
-        mostrarPanelSugerencias();
-
     }
 
+    // 🔥 ACÁ VAN LOS GATILLOS AUTOMÁTICOS (Fuera de los bucles y returns) 🔥
+    mostrarPanelSugerencias();
+    inicializarPlanificador();
+
+    // 2. Evento del botón de sugerencias
+    if (btnSugerencias) {
+        btnSugerencias.onclick = () => {
+            const contenedorSug = document.getElementById('contenedor-sugerencias');
+            if (contenedorSug.style.display === 'none') {
+                mostrarPanelSugerencias(); 
+                contenedorSug.style.display = 'block';
+            } else {
+                contenedorSug.style.display = 'none';
+            }
+        };
+    }
+
+    // 3. Lectura de Tickets Pendientes
     const qTickets = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar"), where("estado", "in", ["Pendiente", "Pendiente_Eliminar"]));
     onSnapshot(qTickets, (snapshot) => {
         listaSolicitudes.innerHTML = '';
@@ -634,6 +652,7 @@ function inicializarBandejaSiervo() {
         }
     });
 
+    // 4. Lectura de Bloqueos Activos
     if (listaActivos) {
         const qActivos = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar"), where("estado", "==", "Aprobado"));
         onSnapshot(qActivos, (snapshot) => {
@@ -688,19 +707,18 @@ function inicializarBandejaSiervo() {
         });
     }
 
-// 🔥 BANDEJA ALINEADA AL HISTORIAL NATIVO 🔥
+    // 🔥 BANDEJA ALINEADA AL HISTORIAL NATIVO 🔥
     btnBandeja.onclick = () => {
-        history.pushState({ page: 'admin_sub' }, '', ''); // Avisamos que avanzamos
+        history.pushState({ page: 'admin_sub' }, '', '');
         document.getElementById('admin-dashboard').style.display = 'none';
         vistaBandeja.style.display = 'block';
     };
 
     const btnVolver = vistaBandeja.querySelector('.btn-volver-admin');
     if (btnVolver) {
-        btnVolver.onclick = () => history.back(); // El vigilante hará el resto
+        btnVolver.onclick = () => history.back();
     }
 }
-
 // LÓGICA DE REGISTRO
 const btnAvanzar = document.getElementById('btn-avanzar-registro');
 if (btnAvanzar) {
@@ -1044,7 +1062,7 @@ export function obtenerSugerenciasTerritorio() {
 
     const analisisTerritorios = {};
 
-    // 1. Contabilizar el estado real de cada territorio
+    // 1. Contabilizar el estado real y las fechas
     window.mapaGlobal.data.forEach(feature => {
         const t = feature.getProperty('territorio');
         const num = feature.getProperty('numero');
@@ -1059,7 +1077,8 @@ export function obtenerSugerenciasTerritorio() {
                 id: prefijo,
                 totalManzanas: 0,
                 manzanasHechas: 0,
-                fechaUltimoCierre: fechaCompletadoGlobal
+                fechaUltimoCierre: fechaCompletadoGlobal,
+                fechaUltimoAvance: 0 // 🔥 Memoria para saber cuándo se inició el ciclo actual
             };
         }
 
@@ -1069,6 +1088,10 @@ export function obtenerSugerenciasTerritorio() {
         const fechaReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
         if (fechaReporteManzana > fechaCompletadoGlobal) {
             analisisTerritorios[prefijo].manzanasHechas++;
+            // Guardamos la fecha de la última manzana reportada en este territorio
+            if (fechaReporteManzana > analisisTerritorios[prefijo].fechaUltimoAvance) {
+                analisisTerritorios[prefijo].fechaUltimoAvance = fechaReporteManzana;
+            }
         }
     });
 
@@ -1090,48 +1113,72 @@ export function obtenerSugerenciasTerritorio() {
     });
 
     // 3. Ordenamiento estratégico
-    // A continuar: Ordenamos de mayor a menor porcentaje (terminar los que están casi listos)
     listaAContinuar.sort((a, b) => b.porcentaje - a.porcentaje);
-    
-    // Nuevos: Ordenamos por fecha de cierre (los que llevan más tiempo sin abrirse van primero)
     listaNuevos.sort((a, b) => a.fechaUltimoCierre - b.fechaUltimoCierre);
 
     return {
-        aContinuar: listaAContinuar.slice(0, 3), // Top 3 para no abrumar
-        nuevos: listaNuevos.slice(0, 3)
+        aContinuar: listaAContinuar, // 🔥 QUITAMOS EL LÍMITE: Te trae TODOS los empezados
+        nuevos: listaNuevos.slice(0, 5) // Sugerimos el Top 5 de los más antiguos
     };
 }
 export function mostrarPanelSugerencias() {
     const sugerencias = obtenerSugerenciasTerritorio();
-    const contenedor = document.getElementById('contenedor-sugerencias'); // Debes crear este div en tu HTML
+    const contenedor = document.getElementById('contenedor-sugerencias');
     if (!contenedor) return;
+
+    // 🔥 TRADUCTOR INTELIGENTE DE FECHAS 🔥
+    const obtenerInfoDia = (timestamp) => {
+        if (!timestamp || timestamp === 0) return { texto: "Desconocido", color: "var(--text-muted)" };
+        const diaNum = new Date(timestamp).getDay(); // 0 = Domingo, 6 = Sábado
+        if (diaNum === 0) return { texto: "Domingo", color: "#FFCA28" }; // Amarillo
+        if (diaNum === 6) return { texto: "Sábado", color: "#66BB6A" }; // Verde
+        return { texto: "Semana (L-V)", color: "#42A5F5" }; // Azul
+    };
 
     let html = `
         <div style="background: var(--surface-color); border: 1px solid var(--primary-color); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
             <h3 style="color: var(--primary-color); margin: 0 0 12px 0; font-size: 16px;">💡 Sugerencias de la Semana</h3>
             <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-                <em>El sistema sugiere priorizar los territorios casi terminados y los más antiguos. Tú decides qué asignar.</em>
+                <em>El sistema prioriza rotar y terminar, mostrándote en qué día se trabajó por última vez para cruzar las asignaciones.</em>
             </p>
     `;
 
     if (sugerencias.aContinuar.length > 0) {
-        html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #4CAF50;">🟢 Prioridad: Terminar Iniciados</h4><ul style="list-style:none; padding:0; margin:0 0 16px 0;">`;
+        html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #4CAF50;">🟢 Prioridad: Terminar Iniciados (${sugerencias.aContinuar.length})</h4>
+                 <ul style="list-style:none; padding:0; margin:0 0 16px 0; max-height: 240px; overflow-y: auto; padding-right: 5px;">`;;
         sugerencias.aContinuar.forEach(t => {
-            html += `<li style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between;">
-                <strong>${t.id}</strong> 
-                <span style="color: #4CAF50; font-weight: bold;">${t.porcentaje}% completo</span>
+            const infoDia = obtenerInfoDia(t.fechaUltimoAvance);
+            html += `
+            <li style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <strong>${t.id}</strong> 
+                    <span style="color: #4CAF50; font-weight: bold; font-size: 13px;">${t.porcentaje}% completo</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between;">
+                    <span>Viene trabajándose en:</span>
+                    <span style="color: ${infoDia.color}; font-weight: bold;">${infoDia.texto}</span>
+                </div>
             </li>`;
         });
         html += `</ul>`;
     }
 
     if (sugerencias.nuevos.length > 0) {
-        html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #FF9800;">🟠 Prioridad: Rotar Territorio Antiguo</h4><ul style="list-style:none; padding:0; margin:0;">`;
+        html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #FF9800;">🟠 Prioridad: Rotar Territorio Antiguo</h4>
+                 <ul style="list-style:none; padding:0; margin:0;">`;
         sugerencias.nuevos.forEach(t => {
+            const infoDia = obtenerInfoDia(t.fechaUltimoCierre);
             const fechaStr = t.fechaUltimoCierre > 0 ? new Date(t.fechaUltimoCierre).toLocaleDateString() : 'Nunca';
-            html += `<li style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between;">
-                <strong>${t.id}</strong> 
-                <span style="color: var(--text-muted); font-size: 13px;">Última vez: ${fechaStr}</span>
+            html += `
+            <li style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <strong>${t.id}</strong> 
+                    <span style="color: var(--text-muted); font-size: 13px;">Cierre: ${fechaStr}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between;">
+                    <span>La última vez se terminó un:</span>
+                    <span style="color: ${infoDia.color}; font-weight: bold;">${infoDia.texto}</span>
+                </div>
             </li>`;
         });
         html += `</ul>`;
@@ -1139,4 +1186,170 @@ export function mostrarPanelSugerencias() {
 
     html += `</div>`;
     contenedor.innerHTML = html;
+}
+
+ //🔥 MÓDULO DEL PLANIFICADOR DE SERVICIO INTELIGENTE 🔥
+
+function inicializarPlanificador() {
+    const btnPlanificador = document.getElementById('btn-admin-planificador');
+    const vistaPlanificador = document.getElementById('admin-planificador-view');
+    const btnAgregarFila = document.getElementById('btn-agregar-fila-plan');
+    const btnSugerir = document.getElementById('btn-sugerir-plan');
+    const btnGuardar = document.getElementById('btn-guardar-plan');
+    const tbody = document.getElementById('tbody-planificador');
+    const dashboard = document.getElementById('admin-dashboard');
+
+    if (!btnPlanificador || !vistaPlanificador) return;
+
+    // Navegación
+    btnPlanificador.onclick = () => {
+        history.pushState({ page: 'admin_planificador' }, '', '');
+        dashboard.style.display = 'none';
+        vistaPlanificador.style.display = 'block';
+        if (tbody.children.length === 0) agregarFilaPlanificador(); // Fila por defecto
+    };
+
+    const btnVolver = vistaPlanificador.querySelector('.btn-volver-admin');
+    if (btnVolver) btnVolver.onclick = () => history.back();
+
+    // 1. LÓGICA PARA AGREGAR FILAS (CON CALENDARIO)
+    function agregarFilaPlanificador() {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = "1px solid var(--border-color)";
+        
+        // 🔥 CAMBIAMOS EL INPUT DE TEXTO POR UN type="date" 🔥
+        tr.innerHTML = `
+            <td style="padding: 8px 5px;"><input type="date" class="input-fecha-plan" style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
+            <td style="padding: 8px 5px;"><input type="time" class="input-hora-plan" style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
+            <td style="padding: 8px 5px;">
+                <select class="tipo-salida-select" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);">
+                    <option value="Casa por Casa">Casa por Casa</option>
+                    <option value="Carritos">Carritos</option>
+                    <option value="Campaña">Campaña</option>
+                    <option value="Revisitas">Revisitas</option>
+                </select>
+                <input type="text" class="input-lugar-plan" placeholder="Lugar/Punto..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
+            </td>
+            <td style="padding: 8px 5px;"><input type="text" class="input-conductor-plan" placeholder="Hermano..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
+            <td style="padding: 8px 5px;"><input type="text" class="input-territorios-plan" placeholder="Ej: T14, T22..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--primary-color); background: rgba(203, 164, 255, 0.1); color: var(--text-color); font-weight: bold;"></td>
+            <td style="padding: 8px 5px; text-align: center;"><button class="btn-eliminar-fila" style="background: transparent; border: none; color: var(--error-text); cursor: pointer; font-size: 16px;">🗑️</button></td>
+        `;
+
+        tr.querySelector('.btn-eliminar-fila').onclick = () => tr.remove();
+        
+        // Si eligen Carritos, bloqueamos el territorio
+        tr.querySelector('.tipo-salida-select').onchange = (e) => {
+            const inputTerr = tr.querySelector('.input-territorios-plan');
+            if(e.target.value === "Carritos") {
+                inputTerr.value = "N/A";
+                inputTerr.style.opacity = "0.5";
+            } else {
+                inputTerr.value = "";
+                inputTerr.style.opacity = "1";
+            }
+        };
+
+        tbody.appendChild(tr);
+    }
+
+    if (btnAgregarFila) btnAgregarFila.onclick = agregarFilaPlanificador;
+
+    // 2. MOTOR DE IA: AUTO-SUGERIR CON ROTACIÓN CRUZADA
+    if (btnSugerir) {
+        btnSugerir.onclick = () => {
+            const sugerencias = obtenerSugerenciasTerritorio();
+            let poolSemana = [];
+            let poolFinde = [];
+
+            // Separamos las sugerencias en dos cajas según cuándo se tocaron por última vez
+            const clasificar = (lista) => {
+                lista.forEach(t => {
+                    const fecha = t.fechaUltimoAvance || t.fechaUltimoCierre || 0;
+                    const dia = fecha > 0 ? new Date(fecha).getDay() : -1;
+                    if (dia === 0 || dia === 6) poolFinde.push(t.id);
+                    else poolSemana.push(t.id);
+                });
+            };
+
+            clasificar(sugerencias.aContinuar);
+            clasificar(sugerencias.nuevos);
+
+            // Quitamos repetidos por si acaso
+            poolSemana = [...new Set(poolSemana)];
+            poolFinde = [...new Set(poolFinde)];
+
+            const filas = tbody.querySelectorAll('tr');
+            filas.forEach(tr => {
+                const tipo = tr.querySelector('.tipo-salida-select').value;
+                const inputTerr = tr.querySelector('.input-territorios-plan');
+                const fechaVal = tr.querySelector('.input-fecha-plan').value;
+
+                if (tipo === "Carritos" || inputTerr.value !== "") return; // No pisar si ya hay algo escrito
+
+                let diaDeLaSalidaEsFinde = false;
+                if (fechaVal) {
+                    const dateObj = new Date(fechaVal + "T12:00:00"); // T12 previene errores de zona horaria
+                    const dayNum = dateObj.getDay();
+                    if (dayNum === 0 || dayNum === 6) diaDeLaSalidaEsFinde = true;
+                }
+
+                // 🔥 LA MAGIA CRUZADA: Si la salida es Finde, le damos un mapa de Semana, y viceversa
+                let poolIdeal = diaDeLaSalidaEsFinde ? poolSemana : poolFinde;
+                
+                // Si nos quedamos sin mapas ideales, agarramos del otro grupo
+                if (poolIdeal.length === 0) poolIdeal = diaDeLaSalidaEsFinde ? poolFinde : poolSemana;
+
+                if (poolIdeal.length > 0) {
+                    inputTerr.value = poolIdeal.shift(); // Saca el primero y se lo asigna
+                }
+            });
+            
+            if(window.mostrarToastM3) window.mostrarToastM3("🪄 Sugerencias aplicadas según rotación cruzada.", "success");
+        };
+    }
+
+    // 3. GENERADOR DEL ANUNCIO (FORMATO WHATSAPP)
+    if (btnGuardar) {
+        btnGuardar.onclick = () => {
+            const filas = tbody.querySelectorAll('tr');
+            if(filas.length === 0) return;
+
+            let mensaje = "📋 *PROGRAMA DE SERVICIO*\n_Semana entrante_\n\n";
+            const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+            filas.forEach(tr => {
+                const fechaVal = tr.querySelector('.input-fecha-plan').value;
+                let fechaStr = "Día a confirmar";
+                if(fechaVal) {
+                    const dateObj = new Date(fechaVal + "T12:00:00");
+                    fechaStr = `${diasSemana[dateObj.getDay()]} ${dateObj.getDate()}/${dateObj.getMonth()+1}`;
+                }
+
+                const hora = tr.querySelector('.input-hora-plan').value || "--:--";
+                const tipo = tr.querySelector('.tipo-salida-select').value;
+                const lugar = tr.querySelector('.input-lugar-plan').value || "Lugar a confirmar";
+                const conductor = tr.querySelector('.input-conductor-plan').value || "A designar";
+                const territorios = tr.querySelector('.input-territorios-plan').value || "A definir";
+
+                const icono = tipo === "Carritos" ? "🛒" : (tipo === "Campaña" ? "🚀" : "🏘️");
+
+                mensaje += `*${fechaStr} - ${hora} hs*\n`;
+                mensaje += `${icono} *${tipo}*\n`;
+                mensaje += `📍 Lugar: ${lugar}\n`;
+                mensaje += `🗣️ Conduce: ${conductor}\n`;
+                if(tipo !== "Carritos") {
+                    mensaje += `🗺️ Territorio: ${territorios}\n`;
+                }
+                mensaje += `\n`;
+            });
+
+            // Copiar al portapapeles
+            navigator.clipboard.writeText(mensaje).then(() => {
+                if(window.mostrarToastM3) window.mostrarToastM3("¡Programa copiado! Listo para pegar en WhatsApp 📱", "success");
+            }).catch(() => {
+                // Si falla el copiado automático, lo mostramos en un alert
+                alert("Acá tenés el programa (Copiá este texto):\n\n" + mensaje);
+            });
+        };
+    }
 }

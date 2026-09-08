@@ -103,8 +103,6 @@
                     
                     <div id="admin-dashboard" style="display: flex; flex-direction: column; gap: 16px; margin-top: 10px;">
                         
-                        <!-- 🔥 CONTENEDOR DE SUGERENCIAS INTELIGENTES 🔥 -->
-                        <div id="contenedor-sugerencias"></div>
 
                         <div class="admin-card" id="btn-admin-solicitudes" style="position: relative;">
                             <div class="admin-icon" style="background: #E53935;">
@@ -148,10 +146,34 @@
                                 <p>Administrar roles de los usuarios registrados</p>
                             </div>
                         </div>
+                        <!-- BOTÓN DE SUGERENCIAS AL FINAL -->
+                        <div class="admin-card" id="btn-admin-sugerencias">
+                            <div class="admin-icon" style="background: #FF9800;">
+                                <svg viewBox="0 0 24 24" fill="white" width="28px" height="28px">
+                                    <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+                                </svg>
+                            </div>
+                            <div class="admin-card-text">
+                                <h3>Sugerencias Inteligentes</h3>
+                                <p>Asistente de rotación de territorios</p>
+                            </div>
+                        </div>
+                        <div class="admin-card" id="btn-admin-planificador">
+                            <div class="admin-icon" style="background: #2196F3;">
+                                <svg viewBox="0 0 24 24" fill="white" width="28px" height="28px"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+                            </div>
+                            <div class="admin-card-text">
+                                <h3>Planificador Semanal</h3>
+                                <p>Armar programa, carritos y conductores</p>
+                            </div>
+                        </div>
+
+                        <!-- EL CONTENEDOR OCULTO QUE SE DESPLIEGA -->
+                        <div id="contenedor-sugerencias" style="display: none; margin-top: -5px; animation: fadeIn 0.3s ease;"></div>
 
                     </div>
 
-                   <div id="admin-solicitudes-view" style="display: none;">
+                  <div id="admin-solicitudes-view" style="display: none;">
                         <button class="btn-volver-admin">⬅ Volver al Panel</button>
                         <h3 style="color: var(--primary-color);">Alertas "No Visitar"</h3>
                         
@@ -164,6 +186,40 @@
                         <div id="lista-bloqueos-activos">
                             <p style="color: gray; text-align: center;">Cargando bloqueos...</p>
                         </div>
+                    </div>
+
+                    <!-- 🔥 VISTA DEL PLANIFICADOR (AHORA SÍ ESTÁ EN LA RAÍZ) 🔥 -->
+                    <div id="admin-planificador-view" style="display: none;">
+                        <button class="btn-volver-admin">⬅ Volver al Panel</button>
+                        <h3 style="color: var(--primary-color);">Planificador de Servicio</h3>
+                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+                            Arma el programa semanal. Las sugerencias se basan en el trabajo real del mapa.
+                        </p>
+                        
+                        <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-x: auto;">
+                            <table style="width: 100%; text-align: left; border-collapse: collapse; min-width: 600px; color: var(--text-color); font-size: 14px;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--primary-color);">
+                                        <th style="padding: 10px 5px;">Día/Fecha</th>
+                                        <th style="padding: 10px 5px;">Hora</th>
+                                        <th style="padding: 10px 5px;">Tipo / Lugar</th>
+                                        <th style="padding: 10px 5px;">Conductor</th>
+                                        <th style="padding: 10px 5px;">Territorios</th>
+                                        <th style="padding: 10px 5px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-planificador">
+                                    <!-- Acá se inyectan las filas con JS -->
+                                </tbody>
+                            </table>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button id="btn-agregar-fila-plan" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1;">+ Salida</button>
+                                <button id="btn-sugerir-plan" style="background: var(--primary-color); border: none; color: white; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 2;">💡 Auto-Sugerir Territorios</button>
+                            </div>
+                        </div>
+                        
+                        <button id="btn-guardar-plan" style="width: 100%; background: #4CAF50; border: none; color: white; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);">Guardar y Generar Anuncio</button>
                     </div>
 
                     <div id="admin-inventario-view" style="display: none;">
