@@ -98,21 +98,26 @@
                     </div>
                 </div>
 
-               <div id="servicio-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
+                             <div id="servicio-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
                     <h2 style="margin-top: 0; color: var(--text-color);">Rincón de Servicio</h2>
                     
                     <div id="admin-dashboard" style="display: flex; flex-direction: column; gap: 16px; margin-top: 10px;">
                         
+                        <!-- 🔥 CONTENEDOR DE SUGERENCIAS INTELIGENTES 🔥 -->
+                        <div id="contenedor-sugerencias"></div>
+
                         <div class="admin-card" id="btn-admin-solicitudes" style="position: relative;">
                             <div class="admin-icon" style="background: #E53935;">
                                 <svg viewBox="0 0 24 24" fill="white" width="28px" height="28px"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
                             </div>
+
                             <div class="admin-card-text">
                                 <h3>Bandeja de Solicitudes</h3>
                                 <p>Revisar alertas de "No visitar"</p>
                             </div>
                             <div id="badge-solicitudes" style="display: none; position: absolute; right: 20px; top: 50%; transform: translateY(-50%); background: #E53935; color: white; border-radius: 50%; width: 26px; height: 26px; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">0</div>
                         </div>
+
 
                         <div class="admin-card" id="btn-admin-inventario">
                             <div class="admin-icon">

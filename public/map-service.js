@@ -545,6 +545,8 @@ function inicializarBandejaSiervo() {
     if (window.miUsuario.rol !== 'siervo' && window.miUsuario.rol !== 'ayudante') {
         btnBandeja.style.display = 'none';
         return;
+        mostrarPanelSugerencias();
+
     }
 
     const qTickets = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar"), where("estado", "in", ["Pendiente", "Pendiente_Eliminar"]));
@@ -1036,4 +1038,105 @@ function abrirFichaVisita(visita) {
     }
     renderizarHistorial();
     if (gn('ficha-modal')) gn('ficha-modal').style.display = 'flex';
+}
+export function obtenerSugerenciasTerritorio() {
+    if (!window.mapaGlobal) return { aContinuar: [], nuevos: [] };
+
+    const analisisTerritorios = {};
+
+    // 1. Contabilizar el estado real de cada territorio
+    window.mapaGlobal.data.forEach(feature => {
+        const t = feature.getProperty('territorio');
+        const num = feature.getProperty('numero');
+        if (!t || !num || num.toLowerCase() === 'plaza') return;
+
+        const prefijo = `T${t}`.trim();
+        const etiqueta = `${prefijo} - ${num}`;
+        const fechaCompletadoGlobal = ultimaFechaCompletoPorTerritorio[prefijo] || 0;
+
+        if (!analisisTerritorios[prefijo]) {
+            analisisTerritorios[prefijo] = {
+                id: prefijo,
+                totalManzanas: 0,
+                manzanasHechas: 0,
+                fechaUltimoCierre: fechaCompletadoGlobal
+            };
+        }
+
+        analisisTerritorios[prefijo].totalManzanas++;
+
+        // Verificamos si esta manzana se hizo después del último cierre global
+        const fechaReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
+        if (fechaReporteManzana > fechaCompletadoGlobal) {
+            analisisTerritorios[prefijo].manzanasHechas++;
+        }
+    });
+
+    const listaAContinuar = [];
+    const listaNuevos = [];
+
+    // 2. Clasificar según porcentaje de avance
+    Object.values(analisisTerritorios).forEach(terr => {
+        if (terr.totalManzanas === 0) return;
+        
+        const porcentaje = Math.round((terr.manzanasHechas / terr.totalManzanas) * 100);
+        terr.porcentaje = porcentaje;
+
+        if (porcentaje > 0 && porcentaje < 100) {
+            listaAContinuar.push(terr);
+        } else if (porcentaje === 0 || porcentaje === 100) {
+            listaNuevos.push(terr);
+        }
+    });
+
+    // 3. Ordenamiento estratégico
+    // A continuar: Ordenamos de mayor a menor porcentaje (terminar los que están casi listos)
+    listaAContinuar.sort((a, b) => b.porcentaje - a.porcentaje);
+    
+    // Nuevos: Ordenamos por fecha de cierre (los que llevan más tiempo sin abrirse van primero)
+    listaNuevos.sort((a, b) => a.fechaUltimoCierre - b.fechaUltimoCierre);
+
+    return {
+        aContinuar: listaAContinuar.slice(0, 3), // Top 3 para no abrumar
+        nuevos: listaNuevos.slice(0, 3)
+    };
+}
+export function mostrarPanelSugerencias() {
+    const sugerencias = obtenerSugerenciasTerritorio();
+    const contenedor = document.getElementById('contenedor-sugerencias'); // Debes crear este div en tu HTML
+    if (!contenedor) return;
+
+    let html = `
+        <div style="background: var(--surface-color); border: 1px solid var(--primary-color); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <h3 style="color: var(--primary-color); margin: 0 0 12px 0; font-size: 16px;">💡 Sugerencias de la Semana</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                <em>El sistema sugiere priorizar los territorios casi terminados y los más antiguos. Tú decides qué asignar.</em>
+            </p>
+    `;
+
+    if (sugerencias.aContinuar.length > 0) {
+        html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #4CAF50;">🟢 Prioridad: Terminar Iniciados</h4><ul style="list-style:none; padding:0; margin:0 0 16px 0;">`;
+        sugerencias.aContinuar.forEach(t => {
+            html += `<li style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                <strong>${t.id}</strong> 
+                <span style="color: #4CAF50; font-weight: bold;">${t.porcentaje}% completo</span>
+            </li>`;
+        });
+        html += `</ul>`;
+    }
+
+    if (sugerencias.nuevos.length > 0) {
+        html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #FF9800;">🟠 Prioridad: Rotar Territorio Antiguo</h4><ul style="list-style:none; padding:0; margin:0;">`;
+        sugerencias.nuevos.forEach(t => {
+            const fechaStr = t.fechaUltimoCierre > 0 ? new Date(t.fechaUltimoCierre).toLocaleDateString() : 'Nunca';
+            html += `<li style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                <strong>${t.id}</strong> 
+                <span style="color: var(--text-muted); font-size: 13px;">Última vez: ${fechaStr}</span>
+            </li>`;
+        });
+        html += `</ul>`;
+    }
+
+    html += `</div>`;
+    contenedor.innerHTML = html;
 }
