@@ -1386,5 +1386,6 @@ function inicializarPlanificador() {
             doc.save("Programa_Servicio.pdf");
             
             if(window.mostrarToastM3) window.mostrarToastM3("¡Tabla PDF generada con éxito!", "success");
+            
         };
     }
