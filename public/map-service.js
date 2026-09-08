@@ -1308,48 +1308,83 @@ function inicializarPlanificador() {
         };
     }
 
-    // 3. GENERADOR DEL ANUNCIO (FORMATO WHATSAPP)
+       // 3. GENERADOR DEL ANUNCIO (FORMATO PDF TIPO EXCEL)
     if (btnGuardar) {
         btnGuardar.onclick = () => {
             const filas = tbody.querySelectorAll('tr');
-            if(filas.length === 0) return;
+            if (filas.length === 0) return;
 
-            let mensaje = "📋 *PROGRAMA DE SERVICIO*\n_Semana entrante_\n\n";
+            // Nos aseguramos de que la librería del PDF esté lista
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                alert("La herramienta para crear el PDF aún está cargando o no se encontró.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            // Lo hacemos en formato horizontal (landscape) para que las columnas respiren
+            const doc = new jsPDF({ orientation: "landscape" }); 
+
+            // Título del documento
+            doc.setFontSize(18);
+            doc.setTextColor(75, 44, 145); // Tono violeta oscuro
+            doc.text("Programa de Salidas al Servicio", 14, 15);
+            
+            doc.setFontSize(11);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Generado desde Mi Territorio App", 14, 22);
+
+            // Preparamos las columnas y los datos
+            const tableColumn = ["Día y Fecha", "Hora", "Tipo de Salida / Lugar", "Conductor", "Territorios"];
+            const tableRows = [];
             const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
             filas.forEach(tr => {
                 const fechaVal = tr.querySelector('.input-fecha-plan').value;
-                let fechaStr = "Día a confirmar";
+                let fechaStr = "";
                 if(fechaVal) {
                     const dateObj = new Date(fechaVal + "T12:00:00");
                     fechaStr = `${diasSemana[dateObj.getDay()]} ${dateObj.getDate()}/${dateObj.getMonth()+1}`;
                 }
 
-                const hora = tr.querySelector('.input-hora-plan').value || "--:--";
+                const hora = tr.querySelector('.input-hora-plan').value || "";
                 const tipo = tr.querySelector('.tipo-salida-select').value;
-                const lugar = tr.querySelector('.input-lugar-plan').value || "Lugar a confirmar";
+                const lugar = tr.querySelector('.input-lugar-plan').value || "A confirmar";
                 const conductor = tr.querySelector('.input-conductor-plan').value || "A designar";
-                const territorios = tr.querySelector('.input-territorios-plan').value || "A definir";
+                const territorios = tr.querySelector('.input-territorios-plan').value || "";
 
-                const icono = tipo === "Carritos" ? "🛒" : (tipo === "Campaña" ? "🚀" : "🏘️");
+                // Juntamos el tipo y el lugar en una sola celda con un salto de línea
+                const infoLugar = `${tipo}\n📍 ${lugar}`;
 
-                mensaje += `*${fechaStr} - ${hora} hs*\n`;
-                mensaje += `${icono} *${tipo}*\n`;
-                mensaje += `📍 Lugar: ${lugar}\n`;
-                mensaje += `🗣️ Conduce: ${conductor}\n`;
-                if(tipo !== "Carritos") {
-                    mensaje += `🗺️ Territorio: ${territorios}\n`;
+                tableRows.push([fechaStr, hora, infoLugar, conductor, territorios]);
+            });
+
+            // Dibujamos la tabla con estilo
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 28,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [203, 164, 255], // El color violeta claro de tu app (#CBA4FF)
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                bodyStyles: {
+                    valign: 'middle'
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 35 },
+                    1: { halign: 'center', cellWidth: 20 },
+                    2: { cellWidth: 60 },
+                    3: { cellWidth: 50 },
+                    4: { halign: 'center', fontStyle: 'bold' }
                 }
-                mensaje += `\n`;
             });
 
-            // Copiar al portapapeles
-            navigator.clipboard.writeText(mensaje).then(() => {
-                if(window.mostrarToastM3) window.mostrarToastM3("¡Programa copiado! Listo para pegar en WhatsApp 📱", "success");
-            }).catch(() => {
-                // Si falla el copiado automático, lo mostramos en un alert
-                alert("Acá tenés el programa (Copiá este texto):\n\n" + mensaje);
-            });
+            // Descargamos el archivo
+            doc.save("Programa_Servicio.pdf");
+            
+            if(window.mostrarToastM3) window.mostrarToastM3("¡Tabla PDF generada con éxito!", "success");
         };
     }
-}
