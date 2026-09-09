@@ -1217,7 +1217,6 @@ function inicializarPlanificador() {
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid var(--border-color)";
         
-        // 🔥 CAMBIAMOS EL INPUT DE TEXTO POR UN type="date" 🔥
         tr.innerHTML = `
             <td style="padding: 8px 5px;"><input type="date" class="input-fecha-plan" style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
             <td style="padding: 8px 5px;"><input type="time" class="input-hora-plan" style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
@@ -1261,7 +1260,6 @@ function inicializarPlanificador() {
             let poolSemana = [];
             let poolFinde = [];
 
-            // Separamos las sugerencias en dos cajas según cuándo se tocaron por última vez
             const clasificar = (lista) => {
                 lista.forEach(t => {
                     const fecha = t.fechaUltimoAvance || t.fechaUltimoCierre || 0;
@@ -1274,7 +1272,6 @@ function inicializarPlanificador() {
             clasificar(sugerencias.aContinuar);
             clasificar(sugerencias.nuevos);
 
-            // Quitamos repetidos por si acaso
             poolSemana = [...new Set(poolSemana)];
             poolFinde = [...new Set(poolFinde)];
 
@@ -1284,30 +1281,165 @@ function inicializarPlanificador() {
                 const inputTerr = tr.querySelector('.input-territorios-plan');
                 const fechaVal = tr.querySelector('.input-fecha-plan').value;
 
-                if (tipo === "Carritos" || inputTerr.value !== "") return; // No pisar si ya hay algo escrito
+                if (tipo === "Carritos" || inputTerr.value !== "") return;
 
                 let diaDeLaSalidaEsFinde = false;
                 if (fechaVal) {
-                    const dateObj = new Date(fechaVal + "T12:00:00"); // T12 previene errores de zona horaria
+                    const dateObj = new Date(fechaVal + "T12:00:00");
                     const dayNum = dateObj.getDay();
                     if (dayNum === 0 || dayNum === 6) diaDeLaSalidaEsFinde = true;
                 }
 
-                // 🔥 LA MAGIA CRUZADA: Si la salida es Finde, le damos un mapa de Semana, y viceversa
                 let poolIdeal = diaDeLaSalidaEsFinde ? poolSemana : poolFinde;
-                
-                // Si nos quedamos sin mapas ideales, agarramos del otro grupo
                 if (poolIdeal.length === 0) poolIdeal = diaDeLaSalidaEsFinde ? poolFinde : poolSemana;
 
                 if (poolIdeal.length > 0) {
-                    inputTerr.value = poolIdeal.shift(); // Saca el primero y se lo asigna
+                    inputTerr.value = poolIdeal.shift();
                 }
             });
             
             if(window.mostrarToastM3) window.mostrarToastM3("🪄 Sugerencias aplicadas según rotación cruzada.", "success");
         };
     }
-}
 
-      
-      
+    // 3. GENERADOR DEL ANUNCIO (FORMATO PDF TIPO EXCEL) - CON NOMBRE DE ARCHIVO INTELIGENTE
+    if (btnGuardar) {
+        btnGuardar.onclick = () => {
+            try {
+                const filas = tbody.querySelectorAll('tr');
+                if (filas.length === 0) {
+                    alert("⚠️ No hay ninguna salida programada en la tabla. Agregá al menos una fila primero.");
+                    return;
+                }
+
+                window.jsPDF = window.jspdf ? window.jspdf.jsPDF : null; 
+                if (!window.jsPDF) {
+                    alert("⏳ La herramienta para PDF aún está cargando. Esperá unos segunditos y volvé a presionar el botón.");
+                    return;
+                }
+
+                // 1. PROCESAMOS LAS FILAS Y FECHAS
+                const tableColumn = ["Día", "Fecha", "Hora", "Lugar / Modalidad", "Territorio", "Conductor"];
+                const tableRows = [];
+                const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                
+                let fechasValidas = [];
+
+                filas.forEach(tr => {
+                    const fechaVal = tr.querySelector('.input-fecha-plan').value;
+                    let diaStr = "-";
+                    let fechaNum = "-";
+                    
+                    if(fechaVal) {
+                        const dateObj = new Date(fechaVal + "T12:00:00");
+                        diaStr = diasSemana[dateObj.getDay()];
+                        fechaNum = dateObj.getDate().toString();
+                        fechasValidas.push(dateObj);
+                    }
+
+                    let hora = tr.querySelector('.input-hora-plan').value;
+                    if (hora) hora = hora + " hs"; else hora = ""; 
+
+                    const tipo = tr.querySelector('.tipo-salida-select').value;
+                    const lugar = tr.querySelector('.input-lugar-plan').value || "";
+                    let conductor = tr.querySelector('.input-conductor-plan').value || "-";
+                    let territorios = tr.querySelector('.input-territorios-plan').value || "-";
+
+                    let infoLugar = lugar;
+                    if (tipo === "Carritos") {
+                        infoLugar = "Predicación con exhibidores";
+                        territorios = "-";
+                        conductor = "-";
+                    } else if (tipo !== "Casa por Casa") {
+                        infoLugar = lugar ? `${tipo} - ${lugar}` : tipo;
+                    } else if (!lugar) {
+                        infoLugar = "A confirmar";
+                    }
+
+                    infoLugar = infoLugar.replace(/[^\x20-\x7E\xC0-\xFF]/g, "").trim(); 
+                    tableRows.push([diaStr, fechaNum, hora, infoLugar, territorios, conductor]);
+                });
+
+                // 2. ARMAMOS EL TÍTULO Y EL NOMBRE DEL ARCHIVO DINÁMICO
+                let tituloPrincipal = "PROGRAMA DE PREDICACIÓN";
+                let nombreArchivo = "Predicacion_Programa.pdf"; // Por si no hay fechas
+
+                if (fechasValidas.length > 0) {
+                    fechasValidas.sort((a, b) => a - b);
+                    const minDate = fechasValidas[0];
+                    const maxDate = fechasValidas[fechasValidas.length - 1];
+                    
+                    // Formateamos para que siempre tengan 2 dígitos (ej: "01", "09")
+                    const diaMin = minDate.getDate().toString().padStart(2, '0');
+                    const diaMax = maxDate.getDate().toString().padStart(2, '0');
+                    const mesMin = (minDate.getMonth() + 1).toString().padStart(2, '0');
+                    const mesMax = (maxDate.getMonth() + 1).toString().padStart(2, '0');
+                    const anioCorto = maxDate.getFullYear().toString().slice(-2); // Saca el "26" de 2026
+
+                    if (minDate.getMonth() === maxDate.getMonth()) {
+                        // Mismo mes (Ej: Predicacion_01-09_09_26.pdf)
+                        tituloPrincipal += ` (Del ${minDate.getDate()} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
+                        nombreArchivo = `Predicacion_${diaMin}-${diaMax}_${mesMax}_${anioCorto}.pdf`;
+                    } else {
+                        // Distinto mes (Ej: Predicacion_28-08_al_03-09_26.pdf)
+                        tituloPrincipal += ` (Del ${minDate.getDate()} de ${meses[minDate.getMonth()]} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
+                        nombreArchivo = `Predicacion_${diaMin}-${mesMin}_al_${diaMax}-${mesMax}_${anioCorto}.pdf`;
+                    }
+                }
+
+                // 3. GENERAMOS EL PDF
+                const doc = new window.jsPDF({ orientation: "landscape" }); 
+                const pageWidth = doc.internal.pageSize.getWidth();
+                
+                doc.setFontSize(16);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(30, 80, 110);
+                doc.text(tituloPrincipal, pageWidth / 2, 16, { align: "center" });
+                
+                const opcionesTabla = {
+                    head: [tableColumn],
+                    body: tableRows,
+                    startY: 22,
+                    theme: 'striped',
+                    styles: {
+                        font: "helvetica",
+                        fontSize: 10,
+                        cellPadding: 2, 
+                        lineColor: [200, 200, 200],
+                        lineWidth: 0.1
+                    },
+                    headStyles: { fillColor: [55, 115, 165], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+                    bodyStyles: { valign: 'middle', textColor: [40, 40, 40] },
+                    alternateRowStyles: { fillColor: [242, 245, 248] },
+                    columnStyles: { 
+                        0: { fontStyle: 'bold', halign: 'left', cellWidth: 25 },   
+                        1: { fontStyle: 'bold', halign: 'center', cellWidth: 18 }, 
+                        2: { halign: 'center', cellWidth: 22 },                    
+                        3: { halign: 'center', cellWidth: 85 },                    
+                        4: { halign: 'center', cellWidth: 40 },                    
+                        5: { halign: 'center', cellWidth: 45 }                     
+                    }
+                };
+
+                if (typeof doc.autoTable === 'function') {
+                    doc.autoTable(opcionesTabla);
+                } else if (typeof window.jspdf.autoTable === 'function' || typeof autoTable === 'function') {
+                    const autoTableFn = window.jspdf.autoTable || autoTable;
+                    autoTableFn(doc, opcionesTabla);
+                } else {
+                    alert("❌ Error: No se pudo cargar el diseño de la cuadrícula.");
+                    return;
+                }
+
+                // 🔥 ACÁ USAMOS LA VARIABLE CON EL NOMBRE INTELIGENTE 🔥
+                doc.save(nombreArchivo);
+                if(window.mostrarToastM3) window.mostrarToastM3("¡Tabla PDF generada con éxito!", "success");
+
+            } catch (error) {
+                console.error("Error al generar PDF:", error);
+                alert("Uy, algo falló al intentar armar el PDF:\n" + error.message);
+            }
+        };
+    }
+} // <-- ¡Esta es la llave que faltaba para cerrar todo!
