@@ -365,3 +365,8 @@ button:active { opacity: 0.8; }
     font-size: 12px;
     text-shadow: none; /* Quitamos la sombra blanca de los otros pines */
 }
+/* Quita el contorno blanco por defecto que Google le pone a los textos (labels) */
+.map-label-salida {
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.4); /* Le da un efecto flotante al emoji */
+    pointer-events: none; /* Evita parpadeos en el hover */
+}

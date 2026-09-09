@@ -192,6 +192,11 @@
                     <div id="admin-planificador-view" style="display: none;">
                         <button class="btn-volver-admin">⬅ Volver al Panel</button>
                         <h3 style="color: var(--primary-color);">Planificador de Servicio</h3>
+                        
+                        <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 5px;">
+    📍 Añadir lugar al mapa
+</button>
+
                         <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
                             Arma el programa semanal. Las sugerencias se basan en el trabajo real del mapa.
                         </p>
@@ -447,6 +452,39 @@
             </div>
         </div>
     </div>
+    <!-- Modal para agregar Punto de Salida -->
+<div id="modal-punto-salida" class="modal-overlay" style="display: none; z-index: 3000;">
+    <div style="background: var(--surface-color); width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid var(--border-color);">
+        <h3 style="margin-top: 0; color: var(--primary-color);">Nuevo Lugar de Salida</h3>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Se añadirá un pin al mapa y aparecerá en el planificador.</p>
+        
+        <div class="input-group">
+            <label>Nombre del Lugar</label>
+            <input type="text" id="punto-nombre" placeholder="Ej: Plaza Matriz">
+        </div>
+        
+        <div class="input-group">
+            <label>Latitud</label>
+            <input type="number" step="any" id="punto-lat" placeholder="Ej: -34.9065">
+        </div>
+        
+        <div class="input-group">
+            <label>Longitud</label>
+            <input type="number" step="any" id="punto-lng" placeholder="Ej: -56.2008">
+        </div>
+
+        <div class="input-group">
+            <label>Emoji del Pin (Opcional)</label>
+            <input type="text" id="punto-emoji" placeholder="Ej: 🌳" value="📍">
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <button id="btn-cancelar-punto" style="background: #E0E0E0; color: black; flex: 1; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;">Cancelar</button>
+            <button id="btn-guardar-punto" style="background: var(--primary-color); color: white; flex: 1; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;">Guardar</button>
+        </div>
+    </div>
+</div>
+
 
      <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>

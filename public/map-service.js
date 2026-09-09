@@ -31,6 +31,8 @@ let ticketsActivosGlobales = new Set();
 // 🔥 Variables de Motor de Ciclos
 let ultimosReportesPorManzana = {};
 let ultimaFechaCompletoPorTerritorio = {};
+export let listaPuntosSalida = []; // La exportamos para usarla luego en tu HTML del planificador
+let pinesPuntosSalida = [];        // Para guardar los marcadores del mapa
 
 export function refrescarEstilosMapa() {
     if(!window.mapaGlobal || !window.miUsuario) return;
@@ -266,6 +268,49 @@ export async function inicializarMapaYVisitas() {
             }
         });
         refrescarEstilosMapa();
+                    // 🔥 ESCUCHA EN TIEMPO REAL DE PUNTOS DE SALIDA 🔥
+            const qPuntosSalida = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+            
+            onSnapshot(qPuntosSalida, (snapshot) => {
+                // 1. Limpiamos pines anteriores del mapa
+                pinesPuntosSalida.forEach(pin => pin.setMap(null));
+                pinesPuntosSalida = [];
+                listaPuntosSalida = []; // Limpiamos la lista en memoria
+
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    // Guardamos para inyectar en el <datalist> más adelante
+                    listaPuntosSalida.push({ id: docSnap.id, ...data });
+
+                    // 2. Dibujamos el pin si el mapa existe
+                    if (window.mapaGlobal && data.lat && data.lng) {
+                        const pinSalida = new google.maps.Marker({
+                            position: { lat: parseFloat(data.lat), lng: parseFloat(data.lng) },
+                            map: window.mapaGlobal,
+                            // Truco: Ocultamos el pin clásico de Google
+                            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+                            // Usamos el label para inyectar el emoji directamente
+                            label: {
+                                text: data.emoji || "📍",
+                                fontSize: "28px",
+                                className: 'map-label-salida'
+                            },
+                            title: data.nombre // Tooltip al pasar el mouse
+                        });
+                        
+                        // Efecto opcional al hacer clic en el emoji
+                        pinSalida.addListener('click', () => {
+                            if (!window.modoRegistroActivo) {
+                                // Aquí podrías hacer zoom o mostrar un mini popup si quisieras
+                                window.mapaGlobal.panTo(pinSalida.getPosition());
+                            }
+                        });
+
+                        pinesPuntosSalida.push(pinSalida);
+                    }
+                });
+            });
+
     });
 
     const qVisitas = query(collection(db, "usuarios", window.miUsuario.email, "mis_visitas"), where("congregacionId", "==", window.miUsuario.congregacionId));
@@ -1443,3 +1488,21 @@ function inicializarPlanificador() {
         };
     }
 } // <-- ¡Esta es la llave que faltaba para cerrar todo!
+import { collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+// Llama a esta función cuando el Siervo llene un formulario y presione "Guardar Punto"
+export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
+    try {
+        const coleccionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+        await addDoc(coleccionRef, {
+            nombre: nombre.trim(),
+            lat: parseFloat(lat),
+            lng: parseFloat(lng),
+            emoji: emoji || "📍"
+        });
+        return true; // Éxito
+    } catch (error) {
+        console.error("Error al guardar punto:", error);
+        return false; // Fallo
+    }
+}
