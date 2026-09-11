@@ -1,7 +1,7 @@
 // ==========================================
 // ARCHIVO: map-service.js (CORE PRINCIPAL LIMPIO)
 // ==========================================
-import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc, addDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 
 // Importamos las herramientas matemáticas y de texto
@@ -31,8 +31,6 @@ let ticketsActivosGlobales = new Set();
 // 🔥 Variables de Motor de Ciclos
 let ultimosReportesPorManzana = {};
 let ultimaFechaCompletoPorTerritorio = {};
-export let listaPuntosSalida = []; // La exportamos para usarla luego en tu HTML del planificador
-let pinesPuntosSalida = [];        // Para guardar los marcadores del mapa
 
 export function refrescarEstilosMapa() {
     if(!window.mapaGlobal || !window.miUsuario) return;
@@ -43,7 +41,7 @@ export function refrescarEstilosMapa() {
     const ahora = Date.now();
     const tiempoLimite = 180 * 24 * 60 * 60 * 1000; // 6 meses
 
-    // 🔥 1. Calculamos en memoria qué territorios están 100% completos
+    // 🔥 Calculamos en memoria qué territorios están 100% completos
     const territoriosTotalmenteCompletos = new Set();
     const gruposPoligonos = {};
     
@@ -64,7 +62,8 @@ export function refrescarEstilosMapa() {
             if(!numMz || numMz.toLowerCase() === 'plaza') continue;
             
             const etiqueta = `${prefijo} - ${numMz}`;
-            if ((ultimosReportesPorManzana[etiqueta] || 0) <= fechaCompleto) {
+            const f = ultimosReportesPorManzana[etiqueta] || 0;
+            if (f <= fechaCompleto) {
                 todosHechosEnEstaRonda = false;
                 break;
             }
@@ -72,88 +71,104 @@ export function refrescarEstilosMapa() {
         if (todosHechosEnEstaRonda) territoriosTotalmenteCompletos.add(prefijo);
     }
 
-    // 🔥 2. NÚCLEO OPTIMIZADO: Función que evalúa la matemática una sola vez por manzana
-    const evaluarManzana = (etiqueta, prefijoTerritorio) => {
-        const infoOcupacion = mapasOcupados[etiqueta];
-        const estaOcupado = infoOcupacion !== undefined;
-        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
-        
-        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
-        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
-        
-        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
-        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
-        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
-
-        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
-        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
-        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= (infoOcupacion.fechaAsignacion || 0) : true;
-
-        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
-
-        return { estaOcupado, esMio, puedeVerOcupacion, mostrarProgreso, nombreAsignado, fechaUltimoReporteManzana };
-    };
-
-    // 🔥 3. Aplicamos colores a los polígonos
     window.mapaGlobal.data.setStyle((feature) => {
         const numTerritorio = feature.getProperty('territorio') || '-';
         const numManzana = feature.getProperty('numero') || '-';
         const etiqueta = `T${numTerritorio} - ${numManzana}`;
         const prefijoTerritorio = `T${numTerritorio}`.trim();
         
-        const estado = evaluarManzana(etiqueta, prefijoTerritorio);
-        const estaSeleccionadaParaRegistro = window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta);
-
         let fillColor = feature.getProperty('fill') || '#6200EE';
         let strokeColor = '#444444';
         let strokeWeight = 1;
         let fillOpacity = 0.35;
 
+        const infoOcupacion = mapasOcupados[etiqueta];
+        const estaOcupado = infoOcupacion !== undefined;
+        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
+        const fechaAsignacion = infoOcupacion ? infoOcupacion.fechaAsignacion : 0;
+
+        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
+        const estaSeleccionadaParaRegistro = window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta);
+        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
+
+        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
+        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
+
+        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
+        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
+        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
+        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
+
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
+
+
         if (window.modoRegistroActivo && estaSeleccionadaParaRegistro) {
             fillColor = '#6200EE'; fillOpacity = 0.5; strokeColor = 'white'; strokeWeight = 3;
-        } else if (estado.mostrarProgreso && !window.modoRegistroActivo) {
+        } else if (mostrarProgreso && !window.modoRegistroActivo) {
             fillColor = '#808080'; fillOpacity = 0.5; strokeColor = '#A9A9A9'; strokeWeight = 1; 
-        } else if (estado.esMio && !window.modoRegistroActivo) {
+        } else if (esMio && !window.modoRegistroActivo) {
             fillColor = '#4CAF50'; fillOpacity = 0.5; strokeColor = '#388E3C'; strokeWeight = 3;
-        } else if (estado.estaOcupado && estado.puedeVerOcupacion) {
+        } else if (estaOcupado && puedeVerOcupacion) {
             fillColor = oscurecerColorWeb(fillColor); fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
         }
-        
+        // 🔥 Si la manzana está en borrador, forzamos un aspecto distintivo
         if (feature.getProperty('es_borrador')) {
-            strokeColor = '#FF9800'; 
-            strokeWeight = 4;        
+            strokeColor = '#FF9800'; // Borde Naranja brillante
+            strokeWeight = 4;        // Más grueso para que resalte
         }
 
         return { fillColor, strokeColor, strokeWeight, fillOpacity, zIndex: 1 };
     });
 
-    // 🔥 4. Aplicamos textos a los pines (Reciclando la matemática)
     for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
-        const prefijoTerritorio = etiqueta.split('-')[0].trim(); 
-        const estado = evaluarManzana(etiqueta, prefijoTerritorio);
+        
+        const partes = etiqueta.split('-');
+        const prefijoTerritorio = partes[0].trim(); 
+        
+        const infoOcupacion = mapasOcupados[etiqueta];
+        const estaOcupado = infoOcupacion !== undefined;
+        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
+        const fechaAsignacion = infoOcupacion ? infoOcupacion.fechaAsignacion : 0;
+
+        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
+        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
         const hayAlertaGlobal = alertasNoVisitarPorManzana[etiqueta];
 
+        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
+        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
+        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
+
+        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
+        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
+        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
+
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
+
+
         let textoExtra = "";
-        if (estado.mostrarProgreso && (estado.puedeVerOcupacion || estado.esMio)) {
-            const dateObj = new Date(estado.fechaUltimoReporteManzana);
-            textoExtra = `\n✅ ${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`;
+        if (mostrarProgreso && (puedeVerOcupacion || esMio)) {
+            const dateObj = new Date(fechaUltimoReporteManzana);
+            const dia = dateObj.getDate().toString().padStart(2, '0');
+            const mes = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            textoExtra = `\n✅ ${dia}/${mes}`;
         }
 
         let textoMostrar = etiqueta;
         
-        if (estado.esMio && !estado.mostrarProgreso) {
+        if (esMio && !mostrarProgreso) {
             textoMostrar = `${etiqueta}\n⭐ Mi Territorio`; 
-        } else if (estado.esMio && estado.mostrarProgreso) {
+        } else if (esMio && mostrarProgreso) {
             textoMostrar = `${etiqueta}${textoExtra}`; 
-        } else if (estado.estaOcupado && (rol === "siervo" || rol === "ayudante")) {
-            textoMostrar = `${etiqueta}\n👤 ${estado.nombreAsignado.split(' ')[0]}${textoExtra}`; 
-        } else if (estado.estaOcupado && rol === "conductor") {
+        } else if (estaOcupado && (rol === "siervo" || rol === "ayudante")) {
+            const soloNombre = nombreAsignado.split(' ')[0]; 
+            textoMostrar = `${etiqueta}\n👤 ${soloNombre}${textoExtra}`; 
+        } else if (estaOcupado && rol === "conductor") {
             textoMostrar = `${etiqueta}\n🔒 Asignado${textoExtra}`; 
         } else {
              textoMostrar = `${etiqueta}${textoExtra}`; 
         }
 
-        if (hayAlertaGlobal && estado.puedeVerOcupacion) {
+        if (hayAlertaGlobal && puedeVerOcupacion) {
              textoMostrar = `⛔ ${textoMostrar}`;
         }
 
@@ -250,70 +265,7 @@ export async function inicializarMapaYVisitas() {
                 mapasOcupados[doc.id] = { asignadoA: data.asignadoA, fechaAsignacion: data.fecha || 0 };
             }
         });
-        // (Esto va justo después del snapshot.forEach donde dibujas los emojis)
-                
-                const datalist = document.getElementById('lista-lugares-salida');
-                if (datalist) {
-                    datalist.innerHTML = '';
-                    window.diccionarioUrlsSalida = {}; // Guardamos las URLs para el PDF
-                    
-                    listaPuntosSalida.forEach(punto => {
-                        // 1. Llenamos el autocompletado
-                        const option = document.createElement('option');
-                        option.value = punto.nombre;
-                        datalist.appendChild(option);
-                        
-                        // 2. Preparamos el enlace de Google Maps para ese lugar
-                        window.diccionarioUrlsSalida[punto.nombre] = `https://www.google.com/maps/search/?api=1&query=${punto.lat},${punto.lng}`;
-                    });
-                }
         refrescarEstilosMapa();
-                   // 🔥 ESCUCHA EN TIEMPO REAL DE PUNTOS DE SALIDA 🔥
-            const qPuntosSalida = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
-            
-            onSnapshot(qPuntosSalida, (snapshot) => {
-                pinesPuntosSalida.forEach(pin => pin.setMap(null));
-                pinesPuntosSalida = [];
-                listaPuntosSalida = []; 
-                window.diccionarioUrlsSalida = {}; // 🔥 Almacén de URLs para el PDF
-
-                const datalist = document.getElementById('lista-lugares-salida');
-                if (datalist) datalist.innerHTML = ''; // Limpiamos la lista previa
-
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    listaPuntosSalida.push({ id: docSnap.id, ...data });
-
-                    // 1. Inyectamos la sugerencia en el HTML para que se pueda elegir al escribir
-                    if (datalist && data.nombre) {
-                        const option = document.createElement('option');
-                        option.value = data.nombre;
-                        datalist.appendChild(option);
-                    }
-
-                    // 2. Guardamos la URL de Google Maps cruzada con el nombre del lugar
-                    if (data.nombre && data.lat && data.lng) {
-                        window.diccionarioUrlsSalida[data.nombre] = `https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}`;
-                    }
-
-                    // 3. Dibujamos el Emoji en el Mapa de fondo
-                    if (window.mapaGlobal && data.lat && data.lng) {
-                        const pinSalida = new google.maps.Marker({
-                            position: { lat: parseFloat(data.lat), lng: parseFloat(data.lng) },
-                            map: window.mapaGlobal,
-                            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
-                            label: { text: data.emoji || "📍", fontSize: "28px", className: 'map-label-salida' },
-                            title: data.nombre
-                        });
-                        
-                        pinSalida.addListener('click', () => {
-                            if (!window.modoRegistroActivo) window.mapaGlobal.panTo(pinSalida.getPosition());
-                        });
-                        pinesPuntosSalida.push(pinSalida);
-                    }
-                });
-            });
-
     });
 
     const qVisitas = query(collection(db, "usuarios", window.miUsuario.email, "mis_visitas"), where("congregacionId", "==", window.miUsuario.congregacionId));
@@ -600,6 +552,7 @@ function inicializarBandejaSiervo() {
     // 🔥 ACÁ VAN LOS GATILLOS AUTOMÁTICOS (Fuera de los bucles y returns) 🔥
     mostrarPanelSugerencias();
     inicializarPlanificador();
+    inicializarPanelHermanos();
 
     // 2. Evento del botón de sugerencias
     if (btnSugerencias) {
@@ -766,7 +719,6 @@ function inicializarBandejaSiervo() {
     if (btnVolver) {
         btnVolver.onclick = () => history.back();
     }
-    inicializarRestoDelPanel();
 }
 // LÓGICA DE REGISTRO
 const btnAvanzar = document.getElementById('btn-avanzar-registro');
@@ -1239,7 +1191,6 @@ export function mostrarPanelSugerencias() {
 
  //🔥 MÓDULO DEL PLANIFICADOR DE SERVICIO INTELIGENTE 🔥
 
-//🔥 MÓDULO DEL PLANIFICADOR DE SERVICIO INTELIGENTE 🔥
 function inicializarPlanificador() {
     const btnPlanificador = document.getElementById('btn-admin-planificador');
     const vistaPlanificador = document.getElementById('admin-planificador-view');
@@ -1251,16 +1202,18 @@ function inicializarPlanificador() {
 
     if (!btnPlanificador || !vistaPlanificador) return;
 
+    // Navegación
     btnPlanificador.onclick = () => {
         history.pushState({ page: 'admin_planificador' }, '', '');
         dashboard.style.display = 'none';
         vistaPlanificador.style.display = 'block';
-        if (tbody.children.length === 0) agregarFilaPlanificador();
+        if (tbody.children.length === 0) agregarFilaPlanificador(); // Fila por defecto
     };
 
     const btnVolver = vistaPlanificador.querySelector('.btn-volver-admin');
     if (btnVolver) btnVolver.onclick = () => history.back();
 
+    // 1. LÓGICA PARA AGREGAR FILAS (CON CALENDARIO)
     function agregarFilaPlanificador() {
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid var(--border-color)";
@@ -1275,8 +1228,7 @@ function inicializarPlanificador() {
                     <option value="Campaña">Campaña</option>
                     <option value="Revisitas">Revisitas</option>
                 </select>
-                <!-- 🔥 Aquí agregamos el list="lista-lugares-salida" para conectarlo con Firestore -->
-                <input type="text" list="lista-lugares-salida" class="input-lugar-plan" placeholder="Lugar/Punto..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
+                <input type="text" class="input-lugar-plan" placeholder="Lugar/Punto..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
             </td>
             <td style="padding: 8px 5px;"><input type="text" class="input-conductor-plan" placeholder="Hermano..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
             <td style="padding: 8px 5px;"><input type="text" class="input-territorios-plan" placeholder="Ej: T14, T22..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--primary-color); background: rgba(203, 164, 255, 0.1); color: var(--text-color); font-weight: bold;"></td>
@@ -1285,23 +1237,29 @@ function inicializarPlanificador() {
 
         tr.querySelector('.btn-eliminar-fila').onclick = () => tr.remove();
         
+        // Si eligen Carritos, bloqueamos el territorio
         tr.querySelector('.tipo-salida-select').onchange = (e) => {
             const inputTerr = tr.querySelector('.input-territorios-plan');
             if(e.target.value === "Carritos") {
-                inputTerr.value = "N/A"; inputTerr.style.opacity = "0.5";
+                inputTerr.value = "N/A";
+                inputTerr.style.opacity = "0.5";
             } else {
-                inputTerr.value = ""; inputTerr.style.opacity = "1";
+                inputTerr.value = "";
+                inputTerr.style.opacity = "1";
             }
         };
+
         tbody.appendChild(tr);
     }
 
     if (btnAgregarFila) btnAgregarFila.onclick = agregarFilaPlanificador;
 
+    // 2. MOTOR DE IA: AUTO-SUGERIR CON ROTACIÓN CRUZADA
     if (btnSugerir) {
         btnSugerir.onclick = () => {
             const sugerencias = obtenerSugerenciasTerritorio();
-            let poolSemana = []; let poolFinde = [];
+            let poolSemana = [];
+            let poolFinde = [];
 
             const clasificar = (lista) => {
                 lista.forEach(t => {
@@ -1312,8 +1270,11 @@ function inicializarPlanificador() {
                 });
             };
 
-            clasificar(sugerencias.aContinuar); clasificar(sugerencias.nuevos);
-            poolSemana = [...new Set(poolSemana)]; poolFinde = [...new Set(poolFinde)];
+            clasificar(sugerencias.aContinuar);
+            clasificar(sugerencias.nuevos);
+
+            poolSemana = [...new Set(poolSemana)];
+            poolFinde = [...new Set(poolFinde)];
 
             const filas = tbody.querySelectorAll('tr');
             filas.forEach(tr => {
@@ -1325,37 +1286,51 @@ function inicializarPlanificador() {
 
                 let diaDeLaSalidaEsFinde = false;
                 if (fechaVal) {
-                    const dayNum = new Date(fechaVal + "T12:00:00").getDay();
+                    const dateObj = new Date(fechaVal + "T12:00:00");
+                    const dayNum = dateObj.getDay();
                     if (dayNum === 0 || dayNum === 6) diaDeLaSalidaEsFinde = true;
                 }
 
                 let poolIdeal = diaDeLaSalidaEsFinde ? poolSemana : poolFinde;
                 if (poolIdeal.length === 0) poolIdeal = diaDeLaSalidaEsFinde ? poolFinde : poolSemana;
 
-                if (poolIdeal.length > 0) inputTerr.value = poolIdeal.shift();
+                if (poolIdeal.length > 0) {
+                    inputTerr.value = poolIdeal.shift();
+                }
             });
-            if(window.mostrarToastM3) window.mostrarToastM3("🪄 Sugerencias aplicadas", "success");
+            
+            if(window.mostrarToastM3) window.mostrarToastM3("🪄 Sugerencias aplicadas según rotación cruzada.", "success");
         };
     }
 
+    // 3. GENERADOR DEL ANUNCIO (FORMATO PDF TIPO EXCEL) - CON NOMBRE DE ARCHIVO INTELIGENTE
     if (btnGuardar) {
         btnGuardar.onclick = () => {
             try {
                 const filas = tbody.querySelectorAll('tr');
-                if (filas.length === 0) return alert("⚠️ Agregá al menos una fila.");
+                if (filas.length === 0) {
+                    alert("⚠️ No hay ninguna salida programada en la tabla. Agregá al menos una fila primero.");
+                    return;
+                }
 
                 window.jsPDF = window.jspdf ? window.jspdf.jsPDF : null; 
-                if (!window.jsPDF) return alert("⏳ La herramienta para PDF aún está cargando.");
+                if (!window.jsPDF) {
+                    alert("⏳ La herramienta para PDF aún está cargando. Esperá unos segunditos y volvé a presionar el botón.");
+                    return;
+                }
 
+                // 1. PROCESAMOS LAS FILAS Y FECHAS
                 const tableColumn = ["Día", "Fecha", "Hora", "Lugar / Modalidad", "Territorio", "Conductor"];
                 const tableRows = [];
                 const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
                 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                
                 let fechasValidas = [];
 
                 filas.forEach(tr => {
                     const fechaVal = tr.querySelector('.input-fecha-plan').value;
-                    let diaStr = "-"; let fechaNum = "-";
+                    let diaStr = "-";
+                    let fechaNum = "-";
                     
                     if(fechaVal) {
                         const dateObj = new Date(fechaVal + "T12:00:00");
@@ -1365,7 +1340,7 @@ function inicializarPlanificador() {
                     }
 
                     let hora = tr.querySelector('.input-hora-plan').value;
-                    hora = hora ? hora + " hs" : ""; 
+                    if (hora) hora = hora + " hs"; else hora = ""; 
 
                     const tipo = tr.querySelector('.tipo-salida-select').value;
                     const lugar = tr.querySelector('.input-lugar-plan').value || "";
@@ -1375,7 +1350,8 @@ function inicializarPlanificador() {
                     let infoLugar = lugar;
                     if (tipo === "Carritos") {
                         infoLugar = "Predicación con exhibidores";
-                        territorios = "-"; conductor = "-";
+                        territorios = "-";
+                        conductor = "-";
                     } else if (tipo !== "Casa por Casa") {
                         infoLugar = lugar ? `${tipo} - ${lugar}` : tipo;
                     } else if (!lugar) {
@@ -1386,34 +1362,54 @@ function inicializarPlanificador() {
                     tableRows.push([diaStr, fechaNum, hora, infoLugar, territorios, conductor]);
                 });
 
+                // 2. ARMAMOS EL TÍTULO Y EL NOMBRE DEL ARCHIVO DINÁMICO
                 let tituloPrincipal = "PROGRAMA DE PREDICACIÓN";
-                let nombreArchivo = "Programa_Predicacion.pdf";
+                let nombreArchivo = "Predicacion_Programa.pdf"; // Por si no hay fechas
 
                 if (fechasValidas.length > 0) {
                     fechasValidas.sort((a, b) => a - b);
-                    const minDate = fechasValidas[0]; const maxDate = fechasValidas[fechasValidas.length - 1];
-                    const dMin = minDate.getDate().toString().padStart(2, '0');
-                    const dMax = maxDate.getDate().toString().padStart(2, '0');
-                    const mMin = (minDate.getMonth() + 1).toString().padStart(2, '0');
-                    const mMax = (maxDate.getMonth() + 1).toString().padStart(2, '0');
-                    const anio = maxDate.getFullYear().toString().slice(-2);
+                    const minDate = fechasValidas[0];
+                    const maxDate = fechasValidas[fechasValidas.length - 1];
+                    
+                    // Formateamos para que siempre tengan 2 dígitos (ej: "01", "09")
+                    const diaMin = minDate.getDate().toString().padStart(2, '0');
+                    const diaMax = maxDate.getDate().toString().padStart(2, '0');
+                    const mesMin = (minDate.getMonth() + 1).toString().padStart(2, '0');
+                    const mesMax = (maxDate.getMonth() + 1).toString().padStart(2, '0');
+                    const anioCorto = maxDate.getFullYear().toString().slice(-2); // Saca el "26" de 2026
 
                     if (minDate.getMonth() === maxDate.getMonth()) {
+                        // Mismo mes (Ej: Predicacion_01-09_09_26.pdf)
                         tituloPrincipal += ` (Del ${minDate.getDate()} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
-                        nombreArchivo = `Programa_${dMin}-${dMax}_${mMax}_${anio}.pdf`;
+                        nombreArchivo = `Predicacion_${diaMin}-${diaMax}_${mesMax}_${anioCorto}.pdf`;
                     } else {
+                        // Distinto mes (Ej: Predicacion_28-08_al_03-09_26.pdf)
                         tituloPrincipal += ` (Del ${minDate.getDate()} de ${meses[minDate.getMonth()]} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
-                        nombreArchivo = `Programa_${dMin}-${mMin}_al_${dMax}-${mMax}_${anio}.pdf`;
+                        nombreArchivo = `Predicacion_${diaMin}-${mesMin}_al_${diaMax}-${mesMax}_${anioCorto}.pdf`;
                     }
                 }
 
+                // 3. GENERAMOS EL PDF
                 const doc = new window.jsPDF({ orientation: "landscape" }); 
-                doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.setTextColor(30, 80, 110);
-                doc.text(tituloPrincipal, doc.internal.pageSize.getWidth() / 2, 16, { align: "center" });
+                const pageWidth = doc.internal.pageSize.getWidth();
+                
+                doc.setFontSize(16);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(30, 80, 110);
+                doc.text(tituloPrincipal, pageWidth / 2, 16, { align: "center" });
                 
                 const opcionesTabla = {
-                    head: [tableColumn], body: tableRows, startY: 22, theme: 'striped',
-                    styles: { font: "helvetica", fontSize: 10, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.1 },
+                    head: [tableColumn],
+                    body: tableRows,
+                    startY: 22,
+                    theme: 'striped',
+                    styles: {
+                        font: "helvetica",
+                        fontSize: 10,
+                        cellPadding: 2, 
+                        lineColor: [200, 200, 200],
+                        lineWidth: 0.1
+                    },
                     headStyles: { fillColor: [55, 115, 165], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                     bodyStyles: { valign: 'middle', textColor: [40, 40, 40] },
                     alternateRowStyles: { fillColor: [242, 245, 248] },
@@ -1424,141 +1420,102 @@ function inicializarPlanificador() {
                         3: { halign: 'center', cellWidth: 85 },                    
                         4: { halign: 'center', cellWidth: 40 },                    
                         5: { halign: 'center', cellWidth: 45 }                     
-                    },
-                    // 🔥 MAGIA: Pintar la celda de azul si coincide con un lugar en Firebase
-                    willDrawCell: function (data) {
-                        if (data.column.index === 3 && window.diccionarioUrlsSalida) {
-                            const nombreExtraido = data.cell.text.join("").split(" - ").pop();
-                            if (window.diccionarioUrlsSalida[nombreExtraido]) {
-                                doc.setTextColor(33, 150, 243); // Azul para simular enlace
-                            }
-                        }
-                    },
-                    // 🔥 MAGIA: Agregar la zona clickeable invisible arriba de la celda
-                    didDrawCell: function (data) {
-                        if (data.column.index === 3 && window.diccionarioUrlsSalida) {
-                            const nombreExtraido = data.cell.text.join("").split(" - ").pop();
-                            const urlMaps = window.diccionarioUrlsSalida[nombreExtraido];
-                            if (urlMaps) {
-                                doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: urlMaps });
-                            }
-                        }
                     }
                 };
 
-                const autoTableFn = window.jspdf.autoTable || autoTable;
-                if (autoTableFn) autoTableFn(doc, opcionesTabla);
-                
+                if (typeof doc.autoTable === 'function') {
+                    doc.autoTable(opcionesTabla);
+                } else if (typeof window.jspdf.autoTable === 'function' || typeof autoTable === 'function') {
+                    const autoTableFn = window.jspdf.autoTable || autoTable;
+                    autoTableFn(doc, opcionesTabla);
+                } else {
+                    alert("❌ Error: No se pudo cargar el diseño de la cuadrícula.");
+                    return;
+                }
+
+                // 🔥 ACÁ USAMOS LA VARIABLE CON EL NOMBRE INTELIGENTE 🔥
                 doc.save(nombreArchivo);
                 if(window.mostrarToastM3) window.mostrarToastM3("¡Tabla PDF generada con éxito!", "success");
 
             } catch (error) {
-                console.error("Error PDF:", error);
-                alert("Error al armar el PDF:\n" + error.message);
+                console.error("Error al generar PDF:", error);
+                alert("Uy, algo falló al intentar armar el PDF:\n" + error.message);
             }
         };
     }
-}
-
-// Llama a esta función cuando el Siervo llene un formulario y presione "Guardar Punto"
-export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
-    try {
-        const coleccionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
-        await addDoc(coleccionRef, {
-            nombre: nombre.trim(),
-            lat: parseFloat(lat),
-            lng: parseFloat(lng),
-            emoji: emoji || "📍"
-        });
-        return true; // Éxito
-    } catch (error) {
-        console.error("Error al guardar punto:", error);
-        return false; // Fallo
-    }
-}
-// 🔥 LÓGICA DE PANTALLAS RESTANTES DEL PANEL DE SERVICIO 🔥
-export function inicializarRestoDelPanel() {
-    const dashboard = document.getElementById('admin-dashboard');
-
-    // --- 1. HISTORIAL Y REPORTES ---
-    const btnReportes = document.getElementById('btn-admin-reportes');
-    const vistaReportes = document.getElementById('admin-reportes-view');
-    const contenedorLista = document.getElementById('lista-reportes');
-
-    if (btnReportes && vistaReportes) {
-        btnReportes.onclick = async () => {
-            history.pushState({ page: 'admin_reportes' }, '', '');
-            dashboard.style.display = 'none';
-            vistaReportes.style.display = 'block';
-            
-            contenedorLista.innerHTML = '<p style="color: gray; text-align: center; margin-top: 20px;">Cargando historial...</p>';
-
-            try {
-                // Traemos los últimos 30 movimientos, ordenados por fecha
-                const q = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad"), orderBy("fecha", "desc"), limit(30));
-                const snapshot = await getDocs(q);
-                
-                if (snapshot.empty) {
-                    contenedorLista.innerHTML = '<p style="color: gray; text-align: center;">No hay actividad registrada aún.</p>';
-                    return;
-                }
-
-                let html = '';
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const fechaObj = new Date(data.fecha);
-                    const fechaStr = `${fechaObj.getDate()}/${fechaObj.getMonth()+1} - ${fechaObj.getHours().toString().padStart(2, '0')}:${fechaObj.getMinutes().toString().padStart(2, '0')}`;
-                    const colorBorde = data.cobertura === 'Completo' ? '#4CAF50' : '#2196F3';
-                    const colorEtiqueta = data.cobertura === 'Completo' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(33, 150, 243, 0.2)';
-                    const manzanasFormat = data.manzanas ? data.manzanas.join(", ") : "-";
-
-                    html += `
-                        <div style="background: var(--surface-color); border-left: 4px solid ${colorBorde}; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <span style="background: ${colorEtiqueta}; color: ${colorBorde}; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold;">${data.cobertura.toUpperCase()}</span>
-                                <span style="font-size: 12px; color: var(--text-muted);">${fechaStr}</span>
-                            </div>
-                            <p style="margin: 0 0 5px 0; color: var(--text-color); font-size: 13px;"><strong>Manzanas:</strong> ${manzanasFormat}</p>
-                            <p style="margin: 0 0 5px 0; color: var(--text-color); font-size: 13px;"><strong>Reportó:</strong> ${data.reportadoPor || 'Sistema'}</p>
-                            ${data.notas ? `<p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 13px; font-style: italic;">"${data.notas}"</p>` : ''}
-                        </div>
-                    `;
-                });
-                
-                contenedorLista.innerHTML = html;
-
-            } catch (error) {
-                console.error("Error cargando reportes:", error);
-                contenedorLista.innerHTML = '<p style="color: var(--error-text); text-align: center;">Error al cargar el historial.</p>';
-            }
-        };
-
-        const btnVolver = vistaReportes.querySelector('.btn-volver-admin');
-        if (btnVolver) btnVolver.onclick = () => history.back();
-    }
-
-    // --- 2. INVENTARIO Y ROLES (Para que no se rompan si haces clic) ---
-    const btnInventario = document.getElementById('btn-admin-inventario');
-    const vistaInventario = document.getElementById('admin-inventario-view');
-    if (btnInventario && vistaInventario) {
-        btnInventario.onclick = () => {
-            history.pushState({ page: 'admin_inventario' }, '', '');
-            dashboard.style.display = 'none';
-            vistaInventario.style.display = 'block';
-        };
-        const btnVolver = vistaInventario.querySelector('.btn-volver-admin');
-        if (btnVolver) btnVolver.onclick = () => history.back();
-    }
-
+} // <-- ¡Esta es la llave que faltaba para cerrar todo!
+// ==========================================
+// MÓDULO DE HERMANOS Y PERMISOS
+// ==========================================
+export function inicializarPanelHermanos() {
     const btnRoles = document.getElementById('btn-admin-roles');
     const vistaRoles = document.getElementById('admin-roles-view');
-    if (btnRoles && vistaRoles) {
-        btnRoles.onclick = () => {
-            history.pushState({ page: 'admin_roles' }, '', '');
-            dashboard.style.display = 'none';
-            vistaRoles.style.display = 'block';
+    const contenedorRoles = document.getElementById('lista-roles');
+    const dashboard = document.getElementById('admin-dashboard');
+
+    if (!btnRoles || !vistaRoles || !contenedorRoles) return;
+
+    btnRoles.onclick = async () => {
+        // Ocultamos el dashboard principal y mostramos la vista
+        if(dashboard) dashboard.style.display = 'none';
+        vistaRoles.style.display = 'block';
+        
+        contenedorRoles.innerHTML = '<p style="color: gray; text-align: center; margin-top: 20px;">Cargando lista de hermanos...</p>';
+
+        try {
+            // Buscamos a todos los usuarios que pertenezcan a esta congregación
+            const qRoles = query(collection(db, "usuarios"), where("congregacionId", "==", window.miUsuario.congregacionId));
+            const snapshot = await getDocs(qRoles);
+            
+            contenedorRoles.innerHTML = '';
+            
+            if (snapshot.empty) {
+                contenedorRoles.innerHTML = '<p style="color: gray; text-align: center;">No se encontraron usuarios.</p>';
+                return;
+            }
+
+            snapshot.forEach(docSnap => {
+                const usuario = docSnap.data();
+                const card = document.createElement('div');
+                card.style.cssText = "background: var(--surface-color); border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;";
+                
+                card.innerHTML = `
+                    <div style="flex: 1; overflow: hidden;">
+                        <p style="margin: 0; color: white; font-weight: bold; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${usuario.nombre || 'Sin nombre'}</p>
+                        <p style="margin: 0; color: gray; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${docSnap.id}</p>
+                    </div>
+                    <select class="select-rol" style="background: var(--bg-color); color: var(--primary-color); border: 1px solid var(--border-color); padding: 8px; border-radius: 8px; font-weight: bold; margin-left: 10px;">
+                        <option value="publicador" ${usuario.rol === 'publicador' ? 'selected' : ''}>Publicador</option>
+                        <option value="conductor" ${usuario.rol === 'conductor' ? 'selected' : ''}>Conductor</option>
+                        <option value="ayudante" ${usuario.rol === 'ayudante' ? 'selected' : ''}>Ayudante</option>
+                        <option value="siervo" ${usuario.rol === 'siervo' ? 'selected' : ''}>Siervo</option>
+                    </select>
+                `;
+
+                // Gatillo para guardar en Firestore si el Siervo cambia el selector
+                card.querySelector('.select-rol').onchange = async (e) => {
+                    const nuevoRol = e.target.value;
+                    try {
+                        await setDoc(doc(db, "usuarios", docSnap.id), { rol: nuevoRol }, { merge: true });
+                        if(window.mostrarToastM3) window.mostrarToastM3("Rol actualizado", "success");
+                    } catch(err) {
+                        alert("Error al actualizar rol.");
+                    }
+                };
+                contenedorRoles.appendChild(card);
+            });
+        } catch (error) {
+            console.error("Error cargando roles:", error);
+            contenedorRoles.innerHTML = '<p style="color: var(--error-text); text-align: center;">Error al cargar datos de Firebase.</p>';
+        }
+    };
+
+    // Botón para volver al menú de cuadraditos
+    const btnVolver = vistaRoles.querySelector('.btn-volver-admin');
+    if (btnVolver) {
+        btnVolver.onclick = () => {
+            vistaRoles.style.display = 'none';
+            if(dashboard) dashboard.style.display = 'flex';
         };
-        const btnVolver = vistaRoles.querySelector('.btn-volver-admin');
-        if (btnVolver) btnVolver.onclick = () => history.back();
     }
 }
