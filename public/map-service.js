@@ -1,7 +1,7 @@
 // ==========================================
 // ARCHIVO: map-service.js (CORE PRINCIPAL LIMPIO)
 // ==========================================
-import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 
 // Importamos las herramientas matemáticas y de texto
@@ -43,7 +43,7 @@ export function refrescarEstilosMapa() {
     const ahora = Date.now();
     const tiempoLimite = 180 * 24 * 60 * 60 * 1000; // 6 meses
 
-    // 🔥 Calculamos en memoria qué territorios están 100% completos
+    // 🔥 1. Calculamos en memoria qué territorios están 100% completos
     const territoriosTotalmenteCompletos = new Set();
     const gruposPoligonos = {};
     
@@ -64,8 +64,7 @@ export function refrescarEstilosMapa() {
             if(!numMz || numMz.toLowerCase() === 'plaza') continue;
             
             const etiqueta = `${prefijo} - ${numMz}`;
-            const f = ultimosReportesPorManzana[etiqueta] || 0;
-            if (f <= fechaCompleto) {
+            if ((ultimosReportesPorManzana[etiqueta] || 0) <= fechaCompleto) {
                 todosHechosEnEstaRonda = false;
                 break;
             }
@@ -73,104 +72,88 @@ export function refrescarEstilosMapa() {
         if (todosHechosEnEstaRonda) territoriosTotalmenteCompletos.add(prefijo);
     }
 
+    // 🔥 2. NÚCLEO OPTIMIZADO: Función que evalúa la matemática una sola vez por manzana
+    const evaluarManzana = (etiqueta, prefijoTerritorio) => {
+        const infoOcupacion = mapasOcupados[etiqueta];
+        const estaOcupado = infoOcupacion !== undefined;
+        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
+        
+        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
+        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
+        
+        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
+        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
+        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
+
+        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
+        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
+        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= (infoOcupacion.fechaAsignacion || 0) : true;
+
+        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
+
+        return { estaOcupado, esMio, puedeVerOcupacion, mostrarProgreso, nombreAsignado, fechaUltimoReporteManzana };
+    };
+
+    // 🔥 3. Aplicamos colores a los polígonos
     window.mapaGlobal.data.setStyle((feature) => {
         const numTerritorio = feature.getProperty('territorio') || '-';
         const numManzana = feature.getProperty('numero') || '-';
         const etiqueta = `T${numTerritorio} - ${numManzana}`;
         const prefijoTerritorio = `T${numTerritorio}`.trim();
         
+        const estado = evaluarManzana(etiqueta, prefijoTerritorio);
+        const estaSeleccionadaParaRegistro = window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta);
+
         let fillColor = feature.getProperty('fill') || '#6200EE';
         let strokeColor = '#444444';
         let strokeWeight = 1;
         let fillOpacity = 0.35;
 
-        const infoOcupacion = mapasOcupados[etiqueta];
-        const estaOcupado = infoOcupacion !== undefined;
-        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
-        const fechaAsignacion = infoOcupacion ? infoOcupacion.fechaAsignacion : 0;
-
-        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
-        const estaSeleccionadaParaRegistro = window.modoRegistroActivo && window.manzanasSeleccionadas.has(etiqueta);
-        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
-
-        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
-        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
-
-        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
-        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
-        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
-        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
-
-        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
-
-
         if (window.modoRegistroActivo && estaSeleccionadaParaRegistro) {
             fillColor = '#6200EE'; fillOpacity = 0.5; strokeColor = 'white'; strokeWeight = 3;
-        } else if (mostrarProgreso && !window.modoRegistroActivo) {
+        } else if (estado.mostrarProgreso && !window.modoRegistroActivo) {
             fillColor = '#808080'; fillOpacity = 0.5; strokeColor = '#A9A9A9'; strokeWeight = 1; 
-        } else if (esMio && !window.modoRegistroActivo) {
+        } else if (estado.esMio && !window.modoRegistroActivo) {
             fillColor = '#4CAF50'; fillOpacity = 0.5; strokeColor = '#388E3C'; strokeWeight = 3;
-        } else if (estaOcupado && puedeVerOcupacion) {
+        } else if (estado.estaOcupado && estado.puedeVerOcupacion) {
             fillColor = oscurecerColorWeb(fillColor); fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
         }
-        // 🔥 Si la manzana está en borrador, forzamos un aspecto distintivo
+        
         if (feature.getProperty('es_borrador')) {
-            strokeColor = '#FF9800'; // Borde Naranja brillante
-            strokeWeight = 4;        // Más grueso para que resalte
+            strokeColor = '#FF9800'; 
+            strokeWeight = 4;        
         }
 
         return { fillColor, strokeColor, strokeWeight, fillOpacity, zIndex: 1 };
     });
 
+    // 🔥 4. Aplicamos textos a los pines (Reciclando la matemática)
     for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
-        
-        const partes = etiqueta.split('-');
-        const prefijoTerritorio = partes[0].trim(); 
-        
-        const infoOcupacion = mapasOcupados[etiqueta];
-        const estaOcupado = infoOcupacion !== undefined;
-        const nombreAsignado = infoOcupacion ? infoOcupacion.asignadoA : "";
-        const fechaAsignacion = infoOcupacion ? infoOcupacion.fechaAsignacion : 0;
-
-        const esMio = estaOcupado && nombreAsignado.trim().toLowerCase() === miNombre;
-        const puedeVerOcupacion = (rol === "siervo" || rol === "ayudante" || rol === "conductor");
+        const prefijoTerritorio = etiqueta.split('-')[0].trim(); 
+        const estado = evaluarManzana(etiqueta, prefijoTerritorio);
         const hayAlertaGlobal = alertasNoVisitarPorManzana[etiqueta];
 
-        const esta100PorCientoCompleto = territoriosTotalmenteCompletos.has(prefijoTerritorio);
-        const fechaUltimoReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
-        const fechaUltimoCompleto = ultimaFechaCompletoPorTerritorio[prefijoTerritorio] || 0;
-
-        const esReciente = (ahora - fechaUltimoReporteManzana) < tiempoLimite;
-        const esDeEstaRonda = fechaUltimoReporteManzana > fechaUltimoCompleto;
-        const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
-
-        const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
-
-
         let textoExtra = "";
-        if (mostrarProgreso && (puedeVerOcupacion || esMio)) {
-            const dateObj = new Date(fechaUltimoReporteManzana);
-            const dia = dateObj.getDate().toString().padStart(2, '0');
-            const mes = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-            textoExtra = `\n✅ ${dia}/${mes}`;
+        if (estado.mostrarProgreso && (estado.puedeVerOcupacion || estado.esMio)) {
+            const dateObj = new Date(estado.fechaUltimoReporteManzana);
+            textoExtra = `\n✅ ${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`;
         }
 
         let textoMostrar = etiqueta;
         
-        if (esMio && !mostrarProgreso) {
+        if (estado.esMio && !estado.mostrarProgreso) {
             textoMostrar = `${etiqueta}\n⭐ Mi Territorio`; 
-        } else if (esMio && mostrarProgreso) {
+        } else if (estado.esMio && estado.mostrarProgreso) {
             textoMostrar = `${etiqueta}${textoExtra}`; 
-        } else if (estaOcupado && (rol === "siervo" || rol === "ayudante")) {
-            const soloNombre = nombreAsignado.split(' ')[0]; 
-            textoMostrar = `${etiqueta}\n👤 ${soloNombre}${textoExtra}`; 
-        } else if (estaOcupado && rol === "conductor") {
+        } else if (estado.estaOcupado && (rol === "siervo" || rol === "ayudante")) {
+            textoMostrar = `${etiqueta}\n👤 ${estado.nombreAsignado.split(' ')[0]}${textoExtra}`; 
+        } else if (estado.estaOcupado && rol === "conductor") {
             textoMostrar = `${etiqueta}\n🔒 Asignado${textoExtra}`; 
         } else {
              textoMostrar = `${etiqueta}${textoExtra}`; 
         }
 
-        if (hayAlertaGlobal && puedeVerOcupacion) {
+        if (hayAlertaGlobal && estado.puedeVerOcupacion) {
              textoMostrar = `⛔ ${textoMostrar}`;
         }
 
@@ -1488,7 +1471,6 @@ function inicializarPlanificador() {
         };
     }
 } // <-- ¡Esta es la llave que faltaba para cerrar todo!
-import { collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 // Llama a esta función cuando el Siervo llene un formulario y presione "Guardar Punto"
 export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
