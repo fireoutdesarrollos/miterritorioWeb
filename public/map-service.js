@@ -1,7 +1,7 @@
 // ==========================================
 // ARCHIVO: map-service.js (CORE PRINCIPAL LIMPIO)
 // ==========================================
-import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 
 // Importamos las herramientas matemáticas y de texto
@@ -29,9 +29,9 @@ let alertasNoVisitarPorManzana = {};
 let ticketsActivosGlobales = new Set(); 
 
 // 🔥 Variables de Motor de Ciclos
-let ultimosReportesPorManzana = {};
-let ultimaFechaCompletoPorTerritorio = {};
-
+export let ultimosReportesPorManzana = {};
+export let ultimaFechaCompletoPorTerritorio = {};
+    
 export function refrescarEstilosMapa() {
     if(!window.mapaGlobal || !window.miUsuario) return;
     
@@ -552,7 +552,6 @@ function inicializarBandejaSiervo() {
     // 🔥 ACÁ VAN LOS GATILLOS AUTOMÁTICOS (Fuera de los bucles y returns) 🔥
     mostrarPanelSugerencias();
     inicializarPlanificador();
-    inicializarPanelHermanos();
 
     // 2. Evento del botón de sugerencias
     if (btnSugerencias) {
@@ -1444,78 +1443,22 @@ function inicializarPlanificador() {
         };
     }
 } // <-- ¡Esta es la llave que faltaba para cerrar todo!
+
 // ==========================================
-// MÓDULO DE HERMANOS Y PERMISOS
+// MÓDULO PUNTOS DE SALIDA (MAPA)
 // ==========================================
-export function inicializarPanelHermanos() {
-    const btnRoles = document.getElementById('btn-admin-roles');
-    const vistaRoles = document.getElementById('admin-roles-view');
-    const contenedorRoles = document.getElementById('lista-roles');
-    const dashboard = document.getElementById('admin-dashboard');
-
-    if (!btnRoles || !vistaRoles || !contenedorRoles) return;
-
-    btnRoles.onclick = async () => {
-        // Ocultamos el dashboard principal y mostramos la vista
-        if(dashboard) dashboard.style.display = 'none';
-        vistaRoles.style.display = 'block';
-        
-        contenedorRoles.innerHTML = '<p style="color: gray; text-align: center; margin-top: 20px;">Cargando lista de hermanos...</p>';
-
-        try {
-            // Buscamos a todos los usuarios que pertenezcan a esta congregación
-            const qRoles = query(collection(db, "usuarios"), where("congregacionId", "==", window.miUsuario.congregacionId));
-            const snapshot = await getDocs(qRoles);
-            
-            contenedorRoles.innerHTML = '';
-            
-            if (snapshot.empty) {
-                contenedorRoles.innerHTML = '<p style="color: gray; text-align: center;">No se encontraron usuarios.</p>';
-                return;
-            }
-
-            snapshot.forEach(docSnap => {
-                const usuario = docSnap.data();
-                const card = document.createElement('div');
-                card.style.cssText = "background: var(--surface-color); border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;";
-                
-                card.innerHTML = `
-                    <div style="flex: 1; overflow: hidden;">
-                        <p style="margin: 0; color: white; font-weight: bold; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${usuario.nombre || 'Sin nombre'}</p>
-                        <p style="margin: 0; color: gray; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${docSnap.id}</p>
-                    </div>
-                    <select class="select-rol" style="background: var(--bg-color); color: var(--primary-color); border: 1px solid var(--border-color); padding: 8px; border-radius: 8px; font-weight: bold; margin-left: 10px;">
-                        <option value="publicador" ${usuario.rol === 'publicador' ? 'selected' : ''}>Publicador</option>
-                        <option value="conductor" ${usuario.rol === 'conductor' ? 'selected' : ''}>Conductor</option>
-                        <option value="ayudante" ${usuario.rol === 'ayudante' ? 'selected' : ''}>Ayudante</option>
-                        <option value="siervo" ${usuario.rol === 'siervo' ? 'selected' : ''}>Siervo</option>
-                    </select>
-                `;
-
-                // Gatillo para guardar en Firestore si el Siervo cambia el selector
-                card.querySelector('.select-rol').onchange = async (e) => {
-                    const nuevoRol = e.target.value;
-                    try {
-                        await setDoc(doc(db, "usuarios", docSnap.id), { rol: nuevoRol }, { merge: true });
-                        if(window.mostrarToastM3) window.mostrarToastM3("Rol actualizado", "success");
-                    } catch(err) {
-                        alert("Error al actualizar rol.");
-                    }
-                };
-                contenedorRoles.appendChild(card);
-            });
-        } catch (error) {
-            console.error("Error cargando roles:", error);
-            contenedorRoles.innerHTML = '<p style="color: var(--error-text); text-align: center;">Error al cargar datos de Firebase.</p>';
-        }
-    };
-
-    // Botón para volver al menú de cuadraditos
-    const btnVolver = vistaRoles.querySelector('.btn-volver-admin');
-    if (btnVolver) {
-        btnVolver.onclick = () => {
-            vistaRoles.style.display = 'none';
-            if(dashboard) dashboard.style.display = 'flex';
-        };
+export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
+    try {
+        const coleccionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+        await addDoc(coleccionRef, {
+            nombre: nombre.trim(),
+            lat: parseFloat(lat),
+            lng: parseFloat(lng),
+            emoji: emoji || "📍"
+        });
+        return true; 
+    } catch (error) {
+        console.error("Error al guardar punto:", error);
+        return false; 
     }
 }

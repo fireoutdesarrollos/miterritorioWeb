@@ -1,9 +1,9 @@
 // ==========================================
 // ARCHIVO: admin-service.js (VERSIÓN DEFINITIVA Y BLINDADA A PUNTOS)
 // ==========================================
-import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, getDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, getDoc, deleteField, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
-import { refrescarEstilosMapa } from "./map-service.js"; 
+import { refrescarEstilosMapa, ultimaFechaCompletoPorTerritorio, ultimosReportesPorManzana } from "./map-service.js";
 
 window.modoRegistroActivo = false;
 window.manzanasSeleccionadas = new Set();
@@ -370,6 +370,7 @@ export function configurarPanelAdmin() {
 
     function renderizarReportesFiltrados() {
         try { 
+            const listaHtml = document.getElementById('lista-reportes');
             if (!listaHtml) return;
             listaHtml.innerHTML = '';
             

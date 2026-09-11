@@ -5,6 +5,7 @@ import { iniciarControladorUI, inicializarModalPuntosSalida } from "./ui-control
 import { iniciarAutenticacion } from "./auth-service.js";
 import { inicializarGuias } from "./guide-service.js";
 import { inicializarMinisterio, escucharHorasMensuales } from "./ministerio-service.js";
+import { configurarPanelAdmin } from "./admin-service.js";
 
 console.log("🚀 MOTOR JS MODULAR (VERSIÓN 200 - ARQUITECTURA LIMPIA) CARGADO");
 
@@ -12,6 +13,7 @@ iniciarControladorUI();
 iniciarAutenticacion();
 inicializarMinisterio(); 
 inicializarModalPuntosSalida(); // 🔥 Arrancamos la escucha de los botones del modal
+configurarPanelAdmin(); 
 
 if (typeof inicializarGuias === 'function') inicializarGuias();
 
