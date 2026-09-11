@@ -234,31 +234,10 @@
                         <div id="lista-inventario"></div>
                     </div>
 
-                    <div id="admin-reportes-view" style="display: none;">
+                   <div id="admin-reportes-view" style="display: none;">
                         <button class="btn-volver-admin">⬅ Volver al Panel</button>
-                        <h3 style="color: var(--primary-color);">Reportes</h3>
-
-                        <!-- 🔥 Pestañas Estilo Android 🔥 -->
-                        <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
-                            <button id="tab-rep-historial" style="background: transparent; color: var(--primary-color); border: none; border-bottom: 2px solid var(--primary-color); padding: 8px; font-weight: bold; flex: 1; cursor: pointer;">Historial</button>
-                            <button id="tab-rep-atrasados" style="background: transparent; color: var(--text-muted); border: none; padding: 8px; font-weight: bold; flex: 1; cursor: pointer;">Más Atrasados</button>
-                        </div>
-
-                        <!-- 🔥 Botón Generar PDF S-13 🔥 -->
-                        <button id="btn-descargar-s13" style="width: 100%; background: #9C27B0; border: none; color: white; padding: 12px; border-radius: 20px; font-weight: bold; margin-bottom: 15px; display: flex; justify-content: center; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 4px 10px rgba(156, 39, 176, 0.3);">
-                            📄 Descargar S-13
-                        </button>
-
-                        <!-- 🔥 Filtros (Solo visibles en Historial) 🔥 -->
-                        <div id="filtros-historial" style="display: flex; gap: 10px; overflow-x: auto; margin-bottom: 15px; padding-bottom: 5px; scrollbar-width: none;">
-                            <button class="filtro-rep active" data-dias="30" style="background: var(--surface-color); border: 1px solid var(--border-color); color: white; padding: 8px 12px; border-radius: 12px; white-space: nowrap; cursor: pointer;">Último Mes</button>
-                            <button class="filtro-rep" data-dias="180" style="background: transparent; border: 1px solid var(--border-color); color: gray; padding: 8px 12px; border-radius: 12px; white-space: nowrap; cursor: pointer;">Últimos 6 Meses</button>
-                            <button class="filtro-rep" data-dias="all" style="background: transparent; border: 1px solid var(--border-color); color: gray; padding: 8px 12px; border-radius: 12px; white-space: nowrap; cursor: pointer;">Historial Completo</button>
-                        </div>
-
-                        <!-- Contenedores Dinámicos -->
-                        <div id="lista-reportes-historial"></div>
-                        <div id="lista-reportes-atrasados" style="display: none;"></div>
+                        <h3 style="color: var(--primary-color);">Historial de Actividad</h3>
+                        <div id="lista-reportes"></div>
                     </div>
 
                     <div id="admin-roles-view" style="display: none;">
