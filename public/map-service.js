@@ -1,7 +1,7 @@
 // ==========================================
 // ARCHIVO: map-service.js (CORE PRINCIPAL LIMPIO)
 // ==========================================
-import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc, addDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
 
 // Importamos las herramientas matemáticas y de texto
@@ -250,45 +250,65 @@ export async function inicializarMapaYVisitas() {
                 mapasOcupados[doc.id] = { asignadoA: data.asignadoA, fechaAsignacion: data.fecha || 0 };
             }
         });
+        // (Esto va justo después del snapshot.forEach donde dibujas los emojis)
+                
+                const datalist = document.getElementById('lista-lugares-salida');
+                if (datalist) {
+                    datalist.innerHTML = '';
+                    window.diccionarioUrlsSalida = {}; // Guardamos las URLs para el PDF
+                    
+                    listaPuntosSalida.forEach(punto => {
+                        // 1. Llenamos el autocompletado
+                        const option = document.createElement('option');
+                        option.value = punto.nombre;
+                        datalist.appendChild(option);
+                        
+                        // 2. Preparamos el enlace de Google Maps para ese lugar
+                        window.diccionarioUrlsSalida[punto.nombre] = `https://www.google.com/maps/search/?api=1&query=${punto.lat},${punto.lng}`;
+                    });
+                }
         refrescarEstilosMapa();
-                    // 🔥 ESCUCHA EN TIEMPO REAL DE PUNTOS DE SALIDA 🔥
+                   // 🔥 ESCUCHA EN TIEMPO REAL DE PUNTOS DE SALIDA 🔥
             const qPuntosSalida = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
             
             onSnapshot(qPuntosSalida, (snapshot) => {
-                // 1. Limpiamos pines anteriores del mapa
                 pinesPuntosSalida.forEach(pin => pin.setMap(null));
                 pinesPuntosSalida = [];
-                listaPuntosSalida = []; // Limpiamos la lista en memoria
+                listaPuntosSalida = []; 
+                window.diccionarioUrlsSalida = {}; // 🔥 Almacén de URLs para el PDF
+
+                const datalist = document.getElementById('lista-lugares-salida');
+                if (datalist) datalist.innerHTML = ''; // Limpiamos la lista previa
 
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    // Guardamos para inyectar en el <datalist> más adelante
                     listaPuntosSalida.push({ id: docSnap.id, ...data });
 
-                    // 2. Dibujamos el pin si el mapa existe
+                    // 1. Inyectamos la sugerencia en el HTML para que se pueda elegir al escribir
+                    if (datalist && data.nombre) {
+                        const option = document.createElement('option');
+                        option.value = data.nombre;
+                        datalist.appendChild(option);
+                    }
+
+                    // 2. Guardamos la URL de Google Maps cruzada con el nombre del lugar
+                    if (data.nombre && data.lat && data.lng) {
+                        window.diccionarioUrlsSalida[data.nombre] = `https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}`;
+                    }
+
+                    // 3. Dibujamos el Emoji en el Mapa de fondo
                     if (window.mapaGlobal && data.lat && data.lng) {
                         const pinSalida = new google.maps.Marker({
                             position: { lat: parseFloat(data.lat), lng: parseFloat(data.lng) },
                             map: window.mapaGlobal,
-                            // Truco: Ocultamos el pin clásico de Google
                             icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
-                            // Usamos el label para inyectar el emoji directamente
-                            label: {
-                                text: data.emoji || "📍",
-                                fontSize: "28px",
-                                className: 'map-label-salida'
-                            },
-                            title: data.nombre // Tooltip al pasar el mouse
+                            label: { text: data.emoji || "📍", fontSize: "28px", className: 'map-label-salida' },
+                            title: data.nombre
                         });
                         
-                        // Efecto opcional al hacer clic en el emoji
                         pinSalida.addListener('click', () => {
-                            if (!window.modoRegistroActivo) {
-                                // Aquí podrías hacer zoom o mostrar un mini popup si quisieras
-                                window.mapaGlobal.panTo(pinSalida.getPosition());
-                            }
+                            if (!window.modoRegistroActivo) window.mapaGlobal.panTo(pinSalida.getPosition());
                         });
-
                         pinesPuntosSalida.push(pinSalida);
                     }
                 });
@@ -746,6 +766,7 @@ function inicializarBandejaSiervo() {
     if (btnVolver) {
         btnVolver.onclick = () => history.back();
     }
+    inicializarRestoDelPanel();
 }
 // LÓGICA DE REGISTRO
 const btnAvanzar = document.getElementById('btn-avanzar-registro');
@@ -1218,6 +1239,7 @@ export function mostrarPanelSugerencias() {
 
  //🔥 MÓDULO DEL PLANIFICADOR DE SERVICIO INTELIGENTE 🔥
 
+//🔥 MÓDULO DEL PLANIFICADOR DE SERVICIO INTELIGENTE 🔥
 function inicializarPlanificador() {
     const btnPlanificador = document.getElementById('btn-admin-planificador');
     const vistaPlanificador = document.getElementById('admin-planificador-view');
@@ -1229,18 +1251,16 @@ function inicializarPlanificador() {
 
     if (!btnPlanificador || !vistaPlanificador) return;
 
-    // Navegación
     btnPlanificador.onclick = () => {
         history.pushState({ page: 'admin_planificador' }, '', '');
         dashboard.style.display = 'none';
         vistaPlanificador.style.display = 'block';
-        if (tbody.children.length === 0) agregarFilaPlanificador(); // Fila por defecto
+        if (tbody.children.length === 0) agregarFilaPlanificador();
     };
 
     const btnVolver = vistaPlanificador.querySelector('.btn-volver-admin');
     if (btnVolver) btnVolver.onclick = () => history.back();
 
-    // 1. LÓGICA PARA AGREGAR FILAS (CON CALENDARIO)
     function agregarFilaPlanificador() {
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid var(--border-color)";
@@ -1255,7 +1275,8 @@ function inicializarPlanificador() {
                     <option value="Campaña">Campaña</option>
                     <option value="Revisitas">Revisitas</option>
                 </select>
-                <input type="text" class="input-lugar-plan" placeholder="Lugar/Punto..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
+                <!-- 🔥 Aquí agregamos el list="lista-lugares-salida" para conectarlo con Firestore -->
+                <input type="text" list="lista-lugares-salida" class="input-lugar-plan" placeholder="Lugar/Punto..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
             </td>
             <td style="padding: 8px 5px;"><input type="text" class="input-conductor-plan" placeholder="Hermano..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
             <td style="padding: 8px 5px;"><input type="text" class="input-territorios-plan" placeholder="Ej: T14, T22..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--primary-color); background: rgba(203, 164, 255, 0.1); color: var(--text-color); font-weight: bold;"></td>
@@ -1264,29 +1285,23 @@ function inicializarPlanificador() {
 
         tr.querySelector('.btn-eliminar-fila').onclick = () => tr.remove();
         
-        // Si eligen Carritos, bloqueamos el territorio
         tr.querySelector('.tipo-salida-select').onchange = (e) => {
             const inputTerr = tr.querySelector('.input-territorios-plan');
             if(e.target.value === "Carritos") {
-                inputTerr.value = "N/A";
-                inputTerr.style.opacity = "0.5";
+                inputTerr.value = "N/A"; inputTerr.style.opacity = "0.5";
             } else {
-                inputTerr.value = "";
-                inputTerr.style.opacity = "1";
+                inputTerr.value = ""; inputTerr.style.opacity = "1";
             }
         };
-
         tbody.appendChild(tr);
     }
 
     if (btnAgregarFila) btnAgregarFila.onclick = agregarFilaPlanificador;
 
-    // 2. MOTOR DE IA: AUTO-SUGERIR CON ROTACIÓN CRUZADA
     if (btnSugerir) {
         btnSugerir.onclick = () => {
             const sugerencias = obtenerSugerenciasTerritorio();
-            let poolSemana = [];
-            let poolFinde = [];
+            let poolSemana = []; let poolFinde = [];
 
             const clasificar = (lista) => {
                 lista.forEach(t => {
@@ -1297,11 +1312,8 @@ function inicializarPlanificador() {
                 });
             };
 
-            clasificar(sugerencias.aContinuar);
-            clasificar(sugerencias.nuevos);
-
-            poolSemana = [...new Set(poolSemana)];
-            poolFinde = [...new Set(poolFinde)];
+            clasificar(sugerencias.aContinuar); clasificar(sugerencias.nuevos);
+            poolSemana = [...new Set(poolSemana)]; poolFinde = [...new Set(poolFinde)];
 
             const filas = tbody.querySelectorAll('tr');
             filas.forEach(tr => {
@@ -1313,51 +1325,37 @@ function inicializarPlanificador() {
 
                 let diaDeLaSalidaEsFinde = false;
                 if (fechaVal) {
-                    const dateObj = new Date(fechaVal + "T12:00:00");
-                    const dayNum = dateObj.getDay();
+                    const dayNum = new Date(fechaVal + "T12:00:00").getDay();
                     if (dayNum === 0 || dayNum === 6) diaDeLaSalidaEsFinde = true;
                 }
 
                 let poolIdeal = diaDeLaSalidaEsFinde ? poolSemana : poolFinde;
                 if (poolIdeal.length === 0) poolIdeal = diaDeLaSalidaEsFinde ? poolFinde : poolSemana;
 
-                if (poolIdeal.length > 0) {
-                    inputTerr.value = poolIdeal.shift();
-                }
+                if (poolIdeal.length > 0) inputTerr.value = poolIdeal.shift();
             });
-            
-            if(window.mostrarToastM3) window.mostrarToastM3("🪄 Sugerencias aplicadas según rotación cruzada.", "success");
+            if(window.mostrarToastM3) window.mostrarToastM3("🪄 Sugerencias aplicadas", "success");
         };
     }
 
-    // 3. GENERADOR DEL ANUNCIO (FORMATO PDF TIPO EXCEL) - CON NOMBRE DE ARCHIVO INTELIGENTE
     if (btnGuardar) {
         btnGuardar.onclick = () => {
             try {
                 const filas = tbody.querySelectorAll('tr');
-                if (filas.length === 0) {
-                    alert("⚠️ No hay ninguna salida programada en la tabla. Agregá al menos una fila primero.");
-                    return;
-                }
+                if (filas.length === 0) return alert("⚠️ Agregá al menos una fila.");
 
                 window.jsPDF = window.jspdf ? window.jspdf.jsPDF : null; 
-                if (!window.jsPDF) {
-                    alert("⏳ La herramienta para PDF aún está cargando. Esperá unos segunditos y volvé a presionar el botón.");
-                    return;
-                }
+                if (!window.jsPDF) return alert("⏳ La herramienta para PDF aún está cargando.");
 
-                // 1. PROCESAMOS LAS FILAS Y FECHAS
                 const tableColumn = ["Día", "Fecha", "Hora", "Lugar / Modalidad", "Territorio", "Conductor"];
                 const tableRows = [];
                 const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
                 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                
                 let fechasValidas = [];
 
                 filas.forEach(tr => {
                     const fechaVal = tr.querySelector('.input-fecha-plan').value;
-                    let diaStr = "-";
-                    let fechaNum = "-";
+                    let diaStr = "-"; let fechaNum = "-";
                     
                     if(fechaVal) {
                         const dateObj = new Date(fechaVal + "T12:00:00");
@@ -1367,7 +1365,7 @@ function inicializarPlanificador() {
                     }
 
                     let hora = tr.querySelector('.input-hora-plan').value;
-                    if (hora) hora = hora + " hs"; else hora = ""; 
+                    hora = hora ? hora + " hs" : ""; 
 
                     const tipo = tr.querySelector('.tipo-salida-select').value;
                     const lugar = tr.querySelector('.input-lugar-plan').value || "";
@@ -1377,8 +1375,7 @@ function inicializarPlanificador() {
                     let infoLugar = lugar;
                     if (tipo === "Carritos") {
                         infoLugar = "Predicación con exhibidores";
-                        territorios = "-";
-                        conductor = "-";
+                        territorios = "-"; conductor = "-";
                     } else if (tipo !== "Casa por Casa") {
                         infoLugar = lugar ? `${tipo} - ${lugar}` : tipo;
                     } else if (!lugar) {
@@ -1389,54 +1386,34 @@ function inicializarPlanificador() {
                     tableRows.push([diaStr, fechaNum, hora, infoLugar, territorios, conductor]);
                 });
 
-                // 2. ARMAMOS EL TÍTULO Y EL NOMBRE DEL ARCHIVO DINÁMICO
                 let tituloPrincipal = "PROGRAMA DE PREDICACIÓN";
-                let nombreArchivo = "Predicacion_Programa.pdf"; // Por si no hay fechas
+                let nombreArchivo = "Programa_Predicacion.pdf";
 
                 if (fechasValidas.length > 0) {
                     fechasValidas.sort((a, b) => a - b);
-                    const minDate = fechasValidas[0];
-                    const maxDate = fechasValidas[fechasValidas.length - 1];
-                    
-                    // Formateamos para que siempre tengan 2 dígitos (ej: "01", "09")
-                    const diaMin = minDate.getDate().toString().padStart(2, '0');
-                    const diaMax = maxDate.getDate().toString().padStart(2, '0');
-                    const mesMin = (minDate.getMonth() + 1).toString().padStart(2, '0');
-                    const mesMax = (maxDate.getMonth() + 1).toString().padStart(2, '0');
-                    const anioCorto = maxDate.getFullYear().toString().slice(-2); // Saca el "26" de 2026
+                    const minDate = fechasValidas[0]; const maxDate = fechasValidas[fechasValidas.length - 1];
+                    const dMin = minDate.getDate().toString().padStart(2, '0');
+                    const dMax = maxDate.getDate().toString().padStart(2, '0');
+                    const mMin = (minDate.getMonth() + 1).toString().padStart(2, '0');
+                    const mMax = (maxDate.getMonth() + 1).toString().padStart(2, '0');
+                    const anio = maxDate.getFullYear().toString().slice(-2);
 
                     if (minDate.getMonth() === maxDate.getMonth()) {
-                        // Mismo mes (Ej: Predicacion_01-09_09_26.pdf)
                         tituloPrincipal += ` (Del ${minDate.getDate()} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
-                        nombreArchivo = `Predicacion_${diaMin}-${diaMax}_${mesMax}_${anioCorto}.pdf`;
+                        nombreArchivo = `Programa_${dMin}-${dMax}_${mMax}_${anio}.pdf`;
                     } else {
-                        // Distinto mes (Ej: Predicacion_28-08_al_03-09_26.pdf)
                         tituloPrincipal += ` (Del ${minDate.getDate()} de ${meses[minDate.getMonth()]} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
-                        nombreArchivo = `Predicacion_${diaMin}-${mesMin}_al_${diaMax}-${mesMax}_${anioCorto}.pdf`;
+                        nombreArchivo = `Programa_${dMin}-${mMin}_al_${dMax}-${mMax}_${anio}.pdf`;
                     }
                 }
 
-                // 3. GENERAMOS EL PDF
                 const doc = new window.jsPDF({ orientation: "landscape" }); 
-                const pageWidth = doc.internal.pageSize.getWidth();
-                
-                doc.setFontSize(16);
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(30, 80, 110);
-                doc.text(tituloPrincipal, pageWidth / 2, 16, { align: "center" });
+                doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.setTextColor(30, 80, 110);
+                doc.text(tituloPrincipal, doc.internal.pageSize.getWidth() / 2, 16, { align: "center" });
                 
                 const opcionesTabla = {
-                    head: [tableColumn],
-                    body: tableRows,
-                    startY: 22,
-                    theme: 'striped',
-                    styles: {
-                        font: "helvetica",
-                        fontSize: 10,
-                        cellPadding: 2, 
-                        lineColor: [200, 200, 200],
-                        lineWidth: 0.1
-                    },
+                    head: [tableColumn], body: tableRows, startY: 22, theme: 'striped',
+                    styles: { font: "helvetica", fontSize: 10, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.1 },
                     headStyles: { fillColor: [55, 115, 165], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                     bodyStyles: { valign: 'middle', textColor: [40, 40, 40] },
                     alternateRowStyles: { fillColor: [242, 245, 248] },
@@ -1447,30 +1424,41 @@ function inicializarPlanificador() {
                         3: { halign: 'center', cellWidth: 85 },                    
                         4: { halign: 'center', cellWidth: 40 },                    
                         5: { halign: 'center', cellWidth: 45 }                     
+                    },
+                    // 🔥 MAGIA: Pintar la celda de azul si coincide con un lugar en Firebase
+                    willDrawCell: function (data) {
+                        if (data.column.index === 3 && window.diccionarioUrlsSalida) {
+                            const nombreExtraido = data.cell.text.join("").split(" - ").pop();
+                            if (window.diccionarioUrlsSalida[nombreExtraido]) {
+                                doc.setTextColor(33, 150, 243); // Azul para simular enlace
+                            }
+                        }
+                    },
+                    // 🔥 MAGIA: Agregar la zona clickeable invisible arriba de la celda
+                    didDrawCell: function (data) {
+                        if (data.column.index === 3 && window.diccionarioUrlsSalida) {
+                            const nombreExtraido = data.cell.text.join("").split(" - ").pop();
+                            const urlMaps = window.diccionarioUrlsSalida[nombreExtraido];
+                            if (urlMaps) {
+                                doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: urlMaps });
+                            }
+                        }
                     }
                 };
 
-                if (typeof doc.autoTable === 'function') {
-                    doc.autoTable(opcionesTabla);
-                } else if (typeof window.jspdf.autoTable === 'function' || typeof autoTable === 'function') {
-                    const autoTableFn = window.jspdf.autoTable || autoTable;
-                    autoTableFn(doc, opcionesTabla);
-                } else {
-                    alert("❌ Error: No se pudo cargar el diseño de la cuadrícula.");
-                    return;
-                }
-
-                // 🔥 ACÁ USAMOS LA VARIABLE CON EL NOMBRE INTELIGENTE 🔥
+                const autoTableFn = window.jspdf.autoTable || autoTable;
+                if (autoTableFn) autoTableFn(doc, opcionesTabla);
+                
                 doc.save(nombreArchivo);
                 if(window.mostrarToastM3) window.mostrarToastM3("¡Tabla PDF generada con éxito!", "success");
 
             } catch (error) {
-                console.error("Error al generar PDF:", error);
-                alert("Uy, algo falló al intentar armar el PDF:\n" + error.message);
+                console.error("Error PDF:", error);
+                alert("Error al armar el PDF:\n" + error.message);
             }
         };
     }
-} // <-- ¡Esta es la llave que faltaba para cerrar todo!
+}
 
 // Llama a esta función cuando el Siervo llene un formulario y presione "Guardar Punto"
 export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
@@ -1486,5 +1474,91 @@ export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
     } catch (error) {
         console.error("Error al guardar punto:", error);
         return false; // Fallo
+    }
+}
+// 🔥 LÓGICA DE PANTALLAS RESTANTES DEL PANEL DE SERVICIO 🔥
+export function inicializarRestoDelPanel() {
+    const dashboard = document.getElementById('admin-dashboard');
+
+    // --- 1. HISTORIAL Y REPORTES ---
+    const btnReportes = document.getElementById('btn-admin-reportes');
+    const vistaReportes = document.getElementById('admin-reportes-view');
+    const contenedorLista = document.getElementById('lista-reportes');
+
+    if (btnReportes && vistaReportes) {
+        btnReportes.onclick = async () => {
+            history.pushState({ page: 'admin_reportes' }, '', '');
+            dashboard.style.display = 'none';
+            vistaReportes.style.display = 'block';
+            
+            contenedorLista.innerHTML = '<p style="color: gray; text-align: center; margin-top: 20px;">Cargando historial...</p>';
+
+            try {
+                // Traemos los últimos 30 movimientos, ordenados por fecha
+                const q = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad"), orderBy("fecha", "desc"), limit(30));
+                const snapshot = await getDocs(q);
+                
+                if (snapshot.empty) {
+                    contenedorLista.innerHTML = '<p style="color: gray; text-align: center;">No hay actividad registrada aún.</p>';
+                    return;
+                }
+
+                let html = '';
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const fechaObj = new Date(data.fecha);
+                    const fechaStr = `${fechaObj.getDate()}/${fechaObj.getMonth()+1} - ${fechaObj.getHours().toString().padStart(2, '0')}:${fechaObj.getMinutes().toString().padStart(2, '0')}`;
+                    const colorBorde = data.cobertura === 'Completo' ? '#4CAF50' : '#2196F3';
+                    const colorEtiqueta = data.cobertura === 'Completo' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(33, 150, 243, 0.2)';
+                    const manzanasFormat = data.manzanas ? data.manzanas.join(", ") : "-";
+
+                    html += `
+                        <div style="background: var(--surface-color); border-left: 4px solid ${colorBorde}; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="background: ${colorEtiqueta}; color: ${colorBorde}; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold;">${data.cobertura.toUpperCase()}</span>
+                                <span style="font-size: 12px; color: var(--text-muted);">${fechaStr}</span>
+                            </div>
+                            <p style="margin: 0 0 5px 0; color: var(--text-color); font-size: 13px;"><strong>Manzanas:</strong> ${manzanasFormat}</p>
+                            <p style="margin: 0 0 5px 0; color: var(--text-color); font-size: 13px;"><strong>Reportó:</strong> ${data.reportadoPor || 'Sistema'}</p>
+                            ${data.notas ? `<p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 13px; font-style: italic;">"${data.notas}"</p>` : ''}
+                        </div>
+                    `;
+                });
+                
+                contenedorLista.innerHTML = html;
+
+            } catch (error) {
+                console.error("Error cargando reportes:", error);
+                contenedorLista.innerHTML = '<p style="color: var(--error-text); text-align: center;">Error al cargar el historial.</p>';
+            }
+        };
+
+        const btnVolver = vistaReportes.querySelector('.btn-volver-admin');
+        if (btnVolver) btnVolver.onclick = () => history.back();
+    }
+
+    // --- 2. INVENTARIO Y ROLES (Para que no se rompan si haces clic) ---
+    const btnInventario = document.getElementById('btn-admin-inventario');
+    const vistaInventario = document.getElementById('admin-inventario-view');
+    if (btnInventario && vistaInventario) {
+        btnInventario.onclick = () => {
+            history.pushState({ page: 'admin_inventario' }, '', '');
+            dashboard.style.display = 'none';
+            vistaInventario.style.display = 'block';
+        };
+        const btnVolver = vistaInventario.querySelector('.btn-volver-admin');
+        if (btnVolver) btnVolver.onclick = () => history.back();
+    }
+
+    const btnRoles = document.getElementById('btn-admin-roles');
+    const vistaRoles = document.getElementById('admin-roles-view');
+    if (btnRoles && vistaRoles) {
+        btnRoles.onclick = () => {
+            history.pushState({ page: 'admin_roles' }, '', '');
+            dashboard.style.display = 'none';
+            vistaRoles.style.display = 'block';
+        };
+        const btnVolver = vistaRoles.querySelector('.btn-volver-admin');
+        if (btnVolver) btnVolver.onclick = () => history.back();
     }
 }

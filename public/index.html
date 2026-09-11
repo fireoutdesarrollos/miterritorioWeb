@@ -188,14 +188,12 @@
                         </div>
                     </div>
 
-                    <!-- 🔥 VISTA DEL PLANIFICADOR (AHORA SÍ ESTÁ EN LA RAÍZ) 🔥 -->
+                    <!-- 🔥 VISTA DEL PLANIFICADOR (CON DATALIST INTEGRADO) 🔥 -->
                     <div id="admin-planificador-view" style="display: none;">
                         <button class="btn-volver-admin">⬅ Volver al Panel</button>
                         <h3 style="color: var(--primary-color);">Planificador de Servicio</h3>
                         
-                        <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 5px;">
-    📍 Añadir lugar al mapa
-</button>
+                        <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 5px;">📍 Añadir lugar al mapa </button>
 
                         <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
                             Arma el programa semanal. Las sugerencias se basan en el trabajo real del mapa.
@@ -217,6 +215,9 @@
                                     <!-- Acá se inyectan las filas con JS -->
                                 </tbody>
                             </table>
+                            
+                            <!-- 🔥 Lista oculta de sugerencias de lugares para Firebase 🔥 -->
+                            <datalist id="lista-lugares-salida"></datalist>
                             
                             <div style="display: flex; gap: 10px; margin-top: 20px;">
                                 <button id="btn-agregar-fila-plan" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1;">+ Salida</button>

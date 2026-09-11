@@ -1,6 +1,7 @@
 // ==========================================
-// ARCHIVO: ui-controller.js (CANDADO DE PRIVACIDAD)
+// ARCHIVO: ui-controller.js (COMPLETO Y CORREGIDO)
 // ==========================================
+import { guardarNuevoPuntoSalida } from './map-service.js';
 
 export function iniciarControladorUI() {
     // 1. Manejo de Pestañas (Tabs)
@@ -13,6 +14,26 @@ export function iniciarControladorUI() {
             
             tabs.forEach(t => t.classList.remove('active')); 
             views.forEach(v => v.style.display = 'none');
+            
+            // 🔥 Aseguramos que al cambiar de pestaña principal, las sub-vistas del Siervo se oculten
+            const vistaSoli = document.getElementById('admin-solicitudes-view');
+            if(vistaSoli) vistaSoli.style.display = 'none';
+            
+            const vistaInv = document.getElementById('admin-inventario-view');
+            if(vistaInv) vistaInv.style.display = 'none';
+            
+            const vistaRep = document.getElementById('admin-reportes-view');
+            if(vistaRep) vistaRep.style.display = 'none';
+            
+            const vistaRol = document.getElementById('admin-roles-view');
+            if(vistaRol) vistaRol.style.display = 'none';
+            
+            const panelPlan = document.getElementById('admin-planificador-view');
+            if (panelPlan) panelPlan.style.display = 'none';
+
+            // Restauramos el menú principal del Siervo
+            const dashboardAdmin = document.getElementById('admin-dashboard');
+            if(dashboardAdmin) dashboardAdmin.style.display = 'flex';
             
             tab.classList.add('active'); 
             const tId = tab.getAttribute('data-target'); 
@@ -36,7 +57,7 @@ export function aplicarCandadoPrivacidad(rol) {
 
     // Solo la alta gerencia puede ver la pestaña
     if (rol === 'siervo' || rol === 'ayudante') {
-        tabServicio.style.display = 'flex'; // o 'block', dependiendo de tu flexbox
+        tabServicio.style.display = 'flex'; 
     } else {
         // Publicadores, invitados y CONDUCTORES rebotan acá
         tabServicio.style.display = 'none';
@@ -48,53 +69,65 @@ export function aplicarCandadoPrivacidad(rol) {
         }
     }
 }
-import { guardarNuevoPuntoSalida } from './map-service.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+// 🔥 LÓGICA DEL MODAL DE PUNTOS DE SALIDA 🔥
+export function inicializarModalPuntosSalida() {
     const modalPunto = document.getElementById('modal-punto-salida');
+    if (!modalPunto) return;
     
     // Abrir modal
-    document.getElementById('btn-abrir-modal-punto')?.addEventListener('click', () => {
-        modalPunto.style.display = 'flex';
-    });
+    const btnAbrir = document.getElementById('btn-abrir-modal-punto');
+    if (btnAbrir) {
+        btnAbrir.addEventListener('click', () => {
+            modalPunto.style.display = 'flex';
+            history.pushState({ modalAbierto: true }, null, null); // Ancla para botón atrás Android
+        });
+    }
 
     // Cerrar modal
-    document.getElementById('btn-cancelar-punto')?.addEventListener('click', () => {
-        modalPunto.style.display = 'none';
-    });
+    const btnCancelar = document.getElementById('btn-cancelar-punto');
+    if (btnCancelar) {
+        btnCancelar.addEventListener('click', () => {
+            modalPunto.style.display = 'none';
+            // Retrocedemos el historial solo si fue abierto por botón (no afecta si el usuario usa la flecha del celular)
+            if (history.state && history.state.modalAbierto) history.back();
+        });
+    }
 
     // Guardar en Firebase
-    document.getElementById('btn-guardar-punto')?.addEventListener('click', async () => {
-        const nombre = document.getElementById('punto-nombre').value;
-        const lat = document.getElementById('punto-lat').value;
-        const lng = document.getElementById('punto-lng').value;
-        const emoji = document.getElementById('punto-emoji').value;
+    const btnGuardar = document.getElementById('btn-guardar-punto');
+    if (btnGuardar) {
+        btnGuardar.addEventListener('click', async () => {
+            const nombre = document.getElementById('punto-nombre').value;
+            const lat = document.getElementById('punto-lat').value;
+            const lng = document.getElementById('punto-lng').value;
+            const emoji = document.getElementById('punto-emoji').value;
 
-        if (!nombre || !lat || !lng) {
-            alert("Por favor, completa el nombre y las coordenadas.");
-            return;
-        }
+            if (!nombre || !lat || !lng) {
+                alert("Por favor, completa el nombre y las coordenadas.");
+                return;
+            }
 
-        // Cambiamos el texto del botón mientras guarda
-        const btnGuardar = document.getElementById('btn-guardar-punto');
-        btnGuardar.innerText = "Guardando...";
-        btnGuardar.disabled = true;
+            btnGuardar.innerText = "Guardando...";
+            btnGuardar.disabled = true;
 
-        const exito = await guardarNuevoPuntoSalida(nombre, lat, lng, emoji);
-        
-        if (exito) {
-            modalPunto.style.display = 'none';
-            // Limpiamos los campos para la próxima vez
-            document.getElementById('punto-nombre').value = '';
-            document.getElementById('punto-lat').value = '';
-            document.getElementById('punto-lng').value = '';
-            document.getElementById('punto-emoji').value = '📍';
-            alert("Lugar guardado. Ya debería aparecer en el mapa.");
-        } else {
-            alert("Hubo un error al guardar.");
-        }
+            const exito = await guardarNuevoPuntoSalida(nombre, lat, lng, emoji);
+            
+            if (exito) {
+                modalPunto.style.display = 'none';
+                document.getElementById('punto-nombre').value = '';
+                document.getElementById('punto-lat').value = '';
+                document.getElementById('punto-lng').value = '';
+                document.getElementById('punto-emoji').value = '📍';
+                
+                if(window.mostrarToastM3) window.mostrarToastM3("Lugar guardado. Ya debería aparecer en el mapa.", "success");
+                else alert("Lugar guardado. Ya debería aparecer en el mapa.");
+            } else {
+                alert("Hubo un error al guardar.");
+            }
 
-        btnGuardar.innerText = "Guardar";
-        btnGuardar.disabled = false;
-    });
-});
+            btnGuardar.innerText = "Guardar";
+            btnGuardar.disabled = false;
+        });
+    }
+}
