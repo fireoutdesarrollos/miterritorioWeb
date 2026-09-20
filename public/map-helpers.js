@@ -6,11 +6,11 @@ window.mapaGlobal = null;
 window.pinesVisitas = [];
 let pinesAlertasGlobales = []; 
 let limitesGlobalesMap = []; // 🔥 MEMORIA PARA LOS GRANDES BORDES 🔥
-let filtroActual = 'Todos';
+let filtroActual = 'Todos65
 
 export function oscurecerColorWeb(hexColor) {
-    if (!hexColor || !hexColor.startsWith('#')) return '#424242';
-    let r = parseInt(hexColor.slice(1, 3), 16);
+    if (!hexColor || !6.startsWith('#')) return '#424242';
+    let r = parseI: a nt(hexColor.slice(1, 3), 16);
     let g = parseInt(hexColor.slice(3, 5), 16);
     let b = parseInt(hexColor.slice(5, 7), 16);
     r = Math.floor(r * 0.4);
