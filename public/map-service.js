@@ -377,6 +377,9 @@ export async function inicializarMapaYVisitas() {
             refrescarEstilosMapa();
 
             window.mapaGlobal.data.addListener('click', (event) => {
+                                // 🔥 Evita que se abra la ficha si el Siervo está marcando un punto de salida 🔥
+                if (window.modoUbicacionActivo) return;
+
                 const numManzana = event.feature.getProperty('numero') || '-'; 
                 const numTerritorio = event.feature.getProperty('territorio') || '-';
                 const etiqueta = `T${numTerritorio} - ${numManzana}`;

@@ -75,26 +75,68 @@ export function inicializarModalPuntosSalida() {
     const modalPunto = document.getElementById('modal-punto-salida');
     if (!modalPunto) return;
     
-    // Abrir modal
+    // 1. Abrir modal
     const btnAbrir = document.getElementById('btn-abrir-modal-punto');
     if (btnAbrir) {
         btnAbrir.addEventListener('click', () => {
             modalPunto.style.display = 'flex';
-            history.pushState({ modalAbierto: true }, null, null); // Ancla para botón atrás Android
+            history.pushState({ modalAbierto: true }, null, null);
         });
     }
 
-    // Cerrar modal
+    // 2. Cerrar modal
     const btnCancelar = document.getElementById('btn-cancelar-punto');
     if (btnCancelar) {
         btnCancelar.addEventListener('click', () => {
             modalPunto.style.display = 'none';
-            // Retrocedemos el historial solo si fue abierto por botón (no afecta si el usuario usa la flecha del celular)
             if (history.state && history.state.modalAbierto) history.back();
         });
     }
 
-    // Guardar en Firebase
+    // 🔥 3. NUEVO: Lógica de buscar en el mapa 🔥
+    const btnElegirMapa = document.getElementById('btn-elegir-mapa-punto');
+    if (btnElegirMapa) {
+        btnElegirMapa.addEventListener('click', () => {
+            // Ocultamos el modal y activamos el "Modo Ubicación"
+            modalPunto.style.display = 'none';
+            window.modoUbicacionActivo = true; 
+            
+            // Creamos un cartel flotante avisando
+            const banner = document.createElement('div');
+            banner.id = 'banner-ubicacion';
+            banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #2196F3; color: white; padding: 12px 24px; border-radius: 30px; font-weight: bold; z-index: 5000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); pointer-events: none; animation: fadeIn 0.3s;';
+            banner.innerText = '👇 Toca el lugar exacto en el mapa';
+            document.body.appendChild(banner);
+            
+            // Función para atrapar el clic, guardar coords y restaurar todo
+            const atraparClic = (lat, lng) => {
+                if(!window.modoUbicacionActivo) return;
+                window.modoUbicacionActivo = false; // Apagamos el modo
+                banner.remove(); // Quitamos el cartel
+                
+                // Llenamos los datos invisibles y mostramos un check verde
+                document.getElementById('punto-lat').value = lat;
+                document.getElementById('punto-lng').value = lng;
+                document.getElementById('punto-coords').value = 'Coordenadas capturadas ✅';
+                
+                // Volvemos a abrir el modal
+                modalPunto.style.display = 'flex';
+            };
+
+            // Escuchamos UN SOLO clic en el mapa base o en una manzana
+            const list1 = window.mapaGlobal.addListener('click', (e) => {
+                atraparClic(e.latLng.lat(), e.latLng.lng());
+                google.maps.event.removeListener(list1);
+            });
+
+            const list2 = window.mapaGlobal.data.addListener('click', (e) => {
+                atraparClic(e.latLng.lat(), e.latLng.lng());
+                google.maps.event.removeListener(list2);
+            });
+        });
+    }
+
+    // 4. Guardar en Firebase
     const btnGuardar = document.getElementById('btn-guardar-punto');
     if (btnGuardar) {
         btnGuardar.addEventListener('click', async () => {
@@ -104,7 +146,7 @@ export function inicializarModalPuntosSalida() {
             const emoji = document.getElementById('punto-emoji').value;
 
             if (!nombre || !lat || !lng) {
-                alert("Por favor, completa el nombre y las coordenadas.");
+                alert("Por favor, dale un nombre y usa el botón para elegir la ubicación en el mapa.");
                 return;
             }
 
@@ -118,10 +160,10 @@ export function inicializarModalPuntosSalida() {
                 document.getElementById('punto-nombre').value = '';
                 document.getElementById('punto-lat').value = '';
                 document.getElementById('punto-lng').value = '';
+                document.getElementById('punto-coords').value = '';
                 document.getElementById('punto-emoji').value = '📍';
                 
                 if(window.mostrarToastM3) window.mostrarToastM3("Lugar guardado. Ya debería aparecer en el mapa.", "success");
-                else alert("Lugar guardado. Ya debería aparecer en el mapa.");
             } else {
                 alert("Hubo un error al guardar.");
             }
