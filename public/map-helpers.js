@@ -2,15 +2,9 @@
 // ARCHIVO: map-helpers.js (Utilidades y Matemática)
 // ==========================================
 
-window.mapaGlobal = null;
-window.pinesVisitas = [];
-let pinesAlertasGlobales = []; 
-let limitesGlobalesMap = []; // 🔥 MEMORIA PARA LOS GRANDES BORDES 🔥
-let filtroActual = 'Todos65
-
 export function oscurecerColorWeb(hexColor) {
-    if (!hexColor || !6.startsWith('#')) return '#424242';
-    let r = parseI: a nt(hexColor.slice(1, 3), 16);
+    if (!hexColor || !hexColor.startsWith('#')) return '#424242';
+    let r = parseInt(hexColor.slice(1, 3), 16);
     let g = parseInt(hexColor.slice(3, 5), 16);
     let b = parseInt(hexColor.slice(5, 7), 16);
     r = Math.floor(r * 0.4);
@@ -27,6 +21,7 @@ export function obtenerColorPin(estado) {
     if (estado === 'Estudio') color = '#FBC02D'; 
     if (estado === 'No visitar' || estado === 'Quitar de No Visitar') color = '#7B1FA2'; 
     if (estado === 'AlertaGlobal') color = '#B71C1C'; 
+    if (estado === 'Punto de Salida') color = '#009688'; // 🔥 Color especial para Puntos de Salida
 
     const svgMarker = encodeURIComponent(`
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
@@ -112,6 +107,7 @@ export function formatearFechaHoy() {
     const anio = d.getFullYear(); const hora = d.getHours().toString().padStart(2, '0'); const min = d.getMinutes().toString().padStart(2, '0');
     return `${dia} ${mes} ${anio} - ${hora}:${min}`; 
 }
+
 export function obtenerMedioDelBordeMasLargo(coordenadas) {
     if (!coordenadas || coordenadas.length === 0) return { lat: 0, lng: 0 };
     if (coordenadas.length === 1) return coordenadas[0];
