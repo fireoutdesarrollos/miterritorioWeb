@@ -1834,4 +1834,3 @@ export async function inicializarMapaYVisitas() {
         });
     });
 }
-}
