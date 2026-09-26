@@ -93,7 +93,7 @@ export function inicializarModalPuntosSalida() {
         });
     }
 
-    // 🔥 3. NUEVO: Lógica de buscar en el mapa 🔥
+    // 🔥 3. NUEVO: Lógica de buscar en el mapa (CON BOTÓN CANCELAR) 🔥
     const btnElegirMapa = document.getElementById('btn-elegir-mapa-punto');
     if (btnElegirMapa) {
         btnElegirMapa.addEventListener('click', () => {
@@ -101,13 +101,19 @@ export function inicializarModalPuntosSalida() {
             modalPunto.style.display = 'none';
             window.modoUbicacionActivo = true; 
             
-            // Creamos un cartel flotante avisando
+            // Creamos un cartel flotante avisando (ahora interactivo)
             const banner = document.createElement('div');
             banner.id = 'banner-ubicacion';
-            banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #2196F3; color: white; padding: 12px 24px; border-radius: 30px; font-weight: bold; z-index: 5000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); pointer-events: none; animation: fadeIn 0.3s;';
-            banner.innerText = '👇 Toca el lugar exacto en el mapa';
+            banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #2196F3; color: white; padding: 10px 20px; border-radius: 30px; font-weight: bold; z-index: 5000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: fadeIn 0.3s; display: flex; align-items: center; gap: 12px;';
+            banner.innerHTML = `
+                <span>👇 Toca el lugar exacto</span>
+                <button id="btn-cancelar-ubicacion" style="background: rgba(255,255,255,0.25); border: none; color: white; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer;">Cancelar</button>
+            `;
             document.body.appendChild(banner);
             
+            // Declaramos las variables de los listeners
+            let list1, list2;
+
             // Función para atrapar el clic, guardar coords y restaurar todo
             const atraparClic = (lat, lng) => {
                 if(!window.modoUbicacionActivo) return;
@@ -124,14 +130,26 @@ export function inicializarModalPuntosSalida() {
             };
 
             // Escuchamos UN SOLO clic en el mapa base o en una manzana
-            const list1 = window.mapaGlobal.addListener('click', (e) => {
+            list1 = window.mapaGlobal.addListener('click', (e) => {
                 atraparClic(e.latLng.lat(), e.latLng.lng());
                 google.maps.event.removeListener(list1);
+                google.maps.event.removeListener(list2);
             });
 
-            const list2 = window.mapaGlobal.data.addListener('click', (e) => {
+            list2 = window.mapaGlobal.data.addListener('click', (e) => {
                 atraparClic(e.latLng.lat(), e.latLng.lng());
+                google.maps.event.removeListener(list1);
                 google.maps.event.removeListener(list2);
+            });
+
+            // Lógica para el botón de cancelar
+            document.getElementById('btn-cancelar-ubicacion').addEventListener('click', (e) => {
+                e.stopPropagation(); // Evita que esto cuente como un clic en el mapa
+                window.modoUbicacionActivo = false;
+                banner.remove();
+                google.maps.event.removeListener(list1);
+                google.maps.event.removeListener(list2);
+                modalPunto.style.display = 'flex'; // Volvemos a abrir el modal sin cambios
             });
         });
     }
