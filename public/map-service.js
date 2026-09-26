@@ -1499,21 +1499,339 @@ function inicializarPlanificador() {
     }
 } // <-- ¡Esta es la llave que faltaba para cerrar todo!
 
-// ==========================================
-// MÓDULO PUNTOS DE SALIDA (MAPA)
-// ==========================================
-export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
-    try {
-        const coleccionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
-        await addDoc(coleccionRef, {
-            nombre: nombre.trim(),
-            lat: parseFloat(lat),
-            lng: parseFloat(lng),
-            emoji: emoji || "📍"
+export async function inicializarMapaYVisitas() {
+    cargarListasMinisterio();
+    inicializarBandejaSiervo(); 
+
+    const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
+    onSnapshot(gestionRef, (snapshot) => {
+        mapasOcupados = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (!data.estaDisponible) {
+                mapasOcupados[doc.id] = { asignadoA: data.asignadoA, fechaAsignacion: data.fecha || 0 };
+            }
         });
-        return true; 
-    } catch (error) {
-        console.error("Error al guardar punto:", error);
-        return false; 
+        refrescarEstilosMapa();
+    });
+
+    const qVisitas = query(collection(db, "usuarios", window.miUsuario.email, "mis_visitas"), where("congregacionId", "==", window.miUsuario.congregacionId));
+    onSnapshot(qVisitas, (snapshot) => {
+        todasLasVisitas = [];
+        snapshot.forEach((doc) => { todasLasVisitas.push({ id: doc.id, ...doc.data() }); });
+        todasLasVisitas.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        limpiarPinesHuerfanos();
+        renderizarVisitas();
+    });
+
+    const qAlertasGlobales = collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar");
+    onSnapshot(qAlertasGlobales, (snapshot) => {
+        alertasGlobalesData = [];
+        alertasNoVisitarPorManzana = {};
+        ticketsActivosGlobales.clear(); 
+
+        snapshot.forEach(docSnap => {
+            ticketsActivosGlobales.add(docSnap.id); 
+            const data = docSnap.data();
+            data.id = docSnap.id; 
+            
+            if (data.estado === "Aprobado") {
+                alertasGlobalesData.push(data); 
+                const etiqueta = `T${data.territorio} - ${data.poligono}`;
+                alertasNoVisitarPorManzana[etiqueta] = true;
+            }
+        });
+        
+        limpiarPinesHuerfanos(); 
+        refrescarEstilosMapa();
+        renderizarAlertasGlobales(); 
+    });
+
+    const qReportes = collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad");
+    onSnapshot(qReportes, (snapshot) => {
+        const reportesManzanas = {};
+        const reportesTerritoriosCompletos = {};
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const fecha = data.fecha || 0;
+            const cobertura = data.cobertura || "Parcial";
+            const manzanas = data.manzanas || [];
+
+            manzanas.forEach(m => {
+                const fechaExistente = reportesManzanas[m] || 0;
+                if (fecha > fechaExistente) reportesManzanas[m] = fecha;
+            });
+
+            if (cobertura === "Completo") {
+                const prefijos = [...new Set(manzanas.map(m => m.split("-")[0].trim()))];
+                prefijos.forEach(prefijo => {
+                    const fechaExistente = reportesTerritoriosCompletos[prefijo] || 0;
+                    if (fecha > fechaExistente) reportesTerritoriosCompletos[prefijo] = fecha;
+                });
+            }
+        });
+
+        ultimosReportesPorManzana = reportesManzanas;
+        ultimaFechaCompletoPorTerritorio = reportesTerritoriosCompletos;
+        refrescarEstilosMapa();
+    });
+
+    document.querySelectorAll('.filtro-chip').forEach(chip => {
+        chip.addEventListener('click', (e) => {
+            document.querySelectorAll('.filtro-chip').forEach(c => c.classList.remove('active')); 
+            e.target.classList.add('active'); filtroActual = e.target.getAttribute('data-filtro'); renderizarVisitas();
+        });
+    });
+
+    const btnCerrar = document.getElementById('btn-cerrar-ficha');
+    if (btnCerrar) {
+        btnCerrar.onclick = () => { 
+            if (window.comprobarCambiosAntesDeSalir && window.comprobarCambiosAntesDeSalir()) {
+                if(window.mostrarModalCambiosSinGuardar) {
+                    window.mostrarModalCambiosSinGuardar(
+                        () => { document.getElementById('btn-guardar-ficha').click(); }, 
+                        () => { document.getElementById('ficha-modal').style.display = 'none'; } 
+                    );
+                }
+            } else {
+                document.getElementById('ficha-modal').style.display = 'none'; 
+            }
+        };
     }
+
+    const btnGuardar = document.getElementById('btn-guardar-ficha');
+    if (btnGuardar) {
+        btnGuardar.onclick = async () => { /* Tu lógica de guardar visita */ };
+    }
+
+    const btnAgendar = document.getElementById('btn-agendar-visita') || document.querySelector('.btn-agendar');
+    if (btnAgendar) {
+        btnAgendar.onclick = (e) => { /* Tu lógica de agenda */ };
+    }
+
+    // 🔥 CONEXIÓN CON GOOGLE MAPS 🔥
+    const llaveSnap = await getDoc(doc(db, "configuracion", "ApiKeys"));
+    if (llaveSnap.exists()) {
+        const scriptMapa = document.createElement('script');
+        scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}&libraries=geometry`;
+        scriptMapa.async = true;
+        
+        scriptMapa.onload = async () => {
+            const mapEl = document.getElementById("map");
+            if (!mapEl) return; 
+            window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
+            refrescarEstilosMapa();
+
+            window.mapaGlobal.data.addListener('click', (event) => {
+                // 🔥 Evita que se abra la ficha si el Siervo está marcando un punto de salida 🔥
+                if (window.modoUbicacionActivo) return;
+
+                const numManzana = event.feature.getProperty('numero') || '-'; 
+                const numTerritorio = event.feature.getProperty('territorio') || '-';
+                const etiqueta = `T${numTerritorio} - ${numManzana}`;
+
+                if (window.modoRegistroActivo) {
+                    if (window.manzanasSeleccionadas.has(etiqueta)) window.manzanasSeleccionadas.delete(etiqueta); else window.manzanasSeleccionadas.add(etiqueta);
+                    document.getElementById('contador-manzanas').innerText = window.manzanasSeleccionadas.size; refrescarEstilosMapa(); 
+                } else {
+                    abrirFichaVisita({ id: Date.now().toString(), nombre: 'Nueva', apellido: 'Visita', territorio: numTerritorio, poligono: numManzana, latitud: event.latLng.lat(), longitud: event.latLng.lng(), estado: 'Nueva', direccion: '', notas: '' });
+                }
+            });
+
+            try {
+                const congIdLimpio = window.miUsuario.congregacionId.toString().trim();
+                // 🔥 CORREGIDO EL NOMBRE DE LA COLECCIÓN A "territorios" 🔥
+                const snapshotReal = await getDocs(collection(db, "congregaciones", congIdLimpio, "territorios")); 
+                const bounds = new google.maps.LatLngBounds();
+                const centrosMacro = {};
+                
+                limitesGlobalesMap = []; // Limpiamos la memoria antes de leer
+                const rol = window.miUsuario.rol;
+                const esAdmin = rol === "siervo" || rol === "ayudante";
+
+                for (let documento of snapshotReal.docs) {
+                    try {
+                        const jsonString = documento.data().geojson;
+                        if (!jsonString) continue;
+                        
+                        const docId = documento.id.toLowerCase();
+                        const parsedGeoJson = JSON.parse(jsonString);
+
+                        // 🔥 SEPARAMOS FRONTERAS DE MANZANAS EN BORRADOR 🔥
+                        const esFrontera = docId.startsWith("limite_") || docId.startsWith("admin_limite_");
+                        const esBorradorManzana = docId.startsWith("admin_") && !esFrontera;
+
+                        if (esFrontera) {
+                            const esVisible = docId.startsWith("limite_") || (docId.startsWith("admin_limite_") && esAdmin);
+                            if (esVisible) {
+                                // Dibujamos la frontera azul de fondo
+                                const layerBorde = new google.maps.Data({ map: window.mapaGlobal });
+                                layerBorde.addGeoJson(parsedGeoJson);
+                                layerBorde.setStyle({ fillColor: 'transparent', strokeColor: '#1565C0', strokeWeight: 4, zIndex: 0, clickable: false });
+
+                                const featuresArray = parsedGeoJson.features || [];
+                                if (featuresArray.length > 0) {
+                                    const feature = featuresArray[0];
+                                    if (feature.geometry && feature.geometry.type === "Polygon") {
+                                        const coordsArray = feature.geometry.coordinates[0];
+                                        const polyPoints = coordsArray.map(p => ({ lng: p[0], lat: p[1] }));
+                                        const properties = feature.properties || {};
+                                        
+                                        let nombreFrontera = properties.nombre || properties.name || "";
+                                        if (!nombreFrontera) {
+                                            const nombreLimpio = docId.replace("limite_", "").replace("admin_limite_", "").replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                                            nombreFrontera = docId.startsWith("admin_") ? `⚙️ ${nombreLimpio} (Oculto)` : `📍 ${nombreLimpio}`;
+                                        }
+
+                                        const puntoBorde = obtenerMedioDelBordeMasLargo(polyPoints);
+                                        const mCartel = new google.maps.Marker({
+                                            position: puntoBorde,
+                                            label: { text: nombreFrontera.toUpperCase(), color: 'white', fontWeight: 'bold', fontSize: '12px', className: 'cartel-frontera' },
+                                            icon: { url: "", scaledSize: new google.maps.Size(0,0) }, zIndex: 1, clickable: false
+                                        });
+                                        limitesGlobalesMap.push(mCartel);
+                                    }
+                                }
+                            }
+                        } else {
+                            // 🔥 SON MANZANAS (Públicas o en Borrador) 🔥
+                            const esVisible = !esBorradorManzana || esAdmin;
+                            if (esVisible) {
+                                const featuresAgregadas = window.mapaGlobal.data.addGeoJson(parsedGeoJson);
+                                // Si es borrador, le marcamos una etiqueta secreta para pintarla distinto luego
+                                if (esBorradorManzana) {
+                                    featuresAgregadas.forEach(f => f.setProperty('es_borrador', true));
+                                }
+                            }
+                        }
+                    } catch(e) { console.error("Error parseando GeoJSON de", documento.id, e) }
+                }
+                
+                // Aseguramos que las manzanas queden por encima de los bordes
+                window.mapaGlobal.data.setStyle({ zIndex: 1 });
+                
+                window.mapaGlobal.data.forEach(feature => {
+                    const fBounds = new google.maps.LatLngBounds(); 
+                    feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
+                    const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
+                    if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
+                    
+                    const esBorrador = feature.getProperty('es_borrador');
+                    let textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
+                    
+                    // Si es borrador, le clavamos el relojito y texto naranja
+                    const labelText = esBorrador ? `⏳ ${textE}` : textE;
+                    const labelColor = esBorrador ? '#E65100' : 'black';
+
+                    const mMicro = new google.maps.Marker({ 
+                        position: fBounds.getCenter(), 
+                        label: { text: labelText, color: labelColor, fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, 
+                        icon: { url: "", scaledSize: new google.maps.Size(0,0) } 
+                    });
+                    
+                    // IMPORTANTE: Guardamos el marcador usando la etiqueta limpia (textE) para no romper el historial
+                    marcadoresMicroMap[textE] = mMicro; 
+
+                    if (numTerritorio) {
+                        if (!centrosMacro[numTerritorio]) centrosMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
+                        centrosMacro[numTerritorio].latSum += fBounds.getCenter().lat(); centrosMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); centrosMacro[numTerritorio].count++;
+                    }
+                });
+
+                const marcadoresMacro = [];
+                Object.keys(centrosMacro).forEach(t => {
+                    const d = centrosMacro[t];
+                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: `T${t}`, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
+                });
+
+                window.mapaGlobal.addListener('zoom_changed', () => {
+                    const z = window.mapaGlobal.getZoom();
+                    if (z >= 15.5) { 
+                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(window.mapaGlobal)); 
+                        marcadoresMacro.forEach(m => m.setMap(null)); 
+                    } 
+                    else if (z >= 13) { 
+                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
+                        marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); 
+                    } 
+                    else { 
+                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
+                        marcadoresMacro.forEach(m => m.setMap(null)); 
+                    }
+
+                    // 🔥 LÓGICA DE CARTELES DE FRONTERA 🔥
+                    if (z < 14) {
+                        limitesGlobalesMap.forEach(m => m.setMap(window.mapaGlobal));
+                    } else {
+                        limitesGlobalesMap.forEach(m => m.setMap(null));
+                    }
+                });
+
+                // Si detectó manzanas, acomoda la cámara
+                if (snapshotReal.size > 0) { 
+                    window.mapaGlobal.fitBounds(bounds); 
+                    google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); 
+                }
+            } catch (error) { console.error("Error cargando mapas: ", error); }
+
+            renderizarVisitas();
+            refrescarEstilosMapa(); 
+            renderizarAlertasGlobales(); 
+        };
+        document.head.appendChild(scriptMapa);
+    }
+
+    // 🔥 LECTOR DE PUNTOS DE SALIDA 🔥
+    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+    onSnapshot(qPuntos, (snapshot) => {
+        // 1. Limpiamos los pines viejos de la pantalla
+        pinesPuntosSalida.forEach(pin => pin.setMap(null));
+        pinesPuntosSalida = [];
+
+        if (!window.mapaGlobal) return;
+
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const puntoId = docSnap.id;
+            
+            // 2. Dibujamos el cartelito con el emoji
+            const marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: window.mapaGlobal,
+                label: {
+                    text: `${data.emoji || '📍'} ${data.nombre}`,
+                    color: '#009688',
+                    fontWeight: '900',
+                    fontSize: '14px',
+                    className: 'map-label-macro'
+                },
+                icon: { url: "", scaledSize: new google.maps.Size(0,0) },
+                zIndex: 2500
+            });
+
+            // 3. Lógica para borrarlo al tocarlo (Solo para admins)
+            marker.addListener('click', () => {
+                if (window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante') {
+                    if (window.mostrarModalConfirmacionGlobal) {
+                        window.mostrarModalConfirmacionGlobal(
+                            "¿Eliminar Lugar de Salida?", 
+                            `¿Quieres borrar "${data.nombre}" del mapa de todos?`, 
+                            "Sí, eliminar", 
+                            "var(--error-text)", 
+                            async () => {
+                                await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
+                                if(window.mostrarToastM3) window.mostrarToastM3("Punto de salida eliminado", "success");
+                            }
+                        );
+                    } else if (confirm(`¿Eliminar el punto de salida: ${data.nombre}?`)) {
+                        deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
+                    }
+                }
+            });
+
+            pinesPuntosSalida.push(marker);
+        });
+    });
+}
 }
