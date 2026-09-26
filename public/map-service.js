@@ -21,7 +21,9 @@ let pinesAlertasGlobales = [];
 let filtroActual = 'Todos';
 let todasLasVisitas = [];
 let alertasGlobalesData = []; 
-let limitesGlobalesMap = []; // 🔥 MEMORIA PARA LOS GRANDES BORDES 🔥
+let limitesGlobalesMap = []; 
+let pinesPuntosSalida = [];
+// 🔥 MEMORIA PARA LOS GRANDES BORDES 🔥
 
 let mapasOcupados = {}; 
 let marcadoresMicroMap = {}; 
@@ -653,6 +655,56 @@ function inicializarBandejaSiervo() {
                 listaSolicitudes.appendChild(card);
             });
         }
+            // 🔥 LECTOR DE PUNTOS DE SALIDA 🔥
+    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+    onSnapshot(qPuntos, (snapshot) => {
+        // 1. Limpiamos los pines viejos de la pantalla
+        pinesPuntosSalida.forEach(pin => pin.setMap(null));
+        pinesPuntosSalida = [];
+
+        if (!window.mapaGlobal) return;
+
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const puntoId = docSnap.id;
+            
+            // 2. Dibujamos el cartelito con el emoji
+            const marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: window.mapaGlobal,
+                label: {
+                    text: `${data.emoji || '📍'} ${data.nombre}`,
+                    color: '#009688', // Color Teal para que combine con el botón
+                    fontWeight: '900',
+                    fontSize: '14px',
+                    className: 'map-label-macro' // Usamos la clase de las letras grandes
+                },
+                icon: { url: "", scaledSize: new google.maps.Size(0,0) }, // Ocultamos el pin rojo normal de Google
+                zIndex: 2500
+            });
+
+            // 3. Lógica para borrarlo al tocarlo (Solo para admins)
+            marker.addListener('click', () => {
+                if (window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante') {
+                    if (window.mostrarModalConfirmacionGlobal) {
+                        window.mostrarModalConfirmacionGlobal(
+                            "¿Eliminar Lugar de Salida?", 
+                            `¿Quieres borrar "${data.nombre}" del mapa de todos?`, 
+                            "Sí, eliminar", 
+                            "var(--error-text)", 
+                            async () => {
+                                await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
+                                if(window.mostrarToastM3) window.mostrarToastM3("Punto de salida eliminado", "success");
+                            }
+                        );
+                    } else if (confirm(`¿Eliminar el punto de salida: ${data.nombre}?`)) {
+                        deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
+                    }
+                }
+            });
+
+            pinesPuntosSalida.push(marker);
+        });
     });
 
     // 4. Lectura de Bloqueos Activos
