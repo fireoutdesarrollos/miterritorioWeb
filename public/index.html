@@ -194,6 +194,7 @@
                         <h3 style="color: var(--primary-color);">Planificador de Servicio</h3>
                         
                         <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 5px;">📍 Añadir lugar al mapa </button>
+                        <button id="btn-abrir-lista-puntos" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 10px;">📋 Gestionar Lugares</button>
 
                         <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
                             Arma el programa semanal. Las sugerencias se basan en el trabajo real del mapa.
@@ -486,6 +487,20 @@
             </div>
         </div>
     </div>
+    <!-- Modal de Lista de Puntos -->
+<div id="modal-lista-puntos" class="modal-overlay" style="display: none; z-index: 3000;">
+    <div style="background: var(--surface-color); width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid var(--border-color); max-height: 80vh; display: flex; flex-direction: column;">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0; color: var(--primary-color);">Lugares de Salida</h3>
+            <button id="btn-cerrar-lista-puntos" style="background: transparent; border: none; color: var(--text-color); font-size: 20px; cursor: pointer;">✖</button>
+        </div>
+
+        <div id="contenedor-lista-puntos" style="overflow-y: auto; flex: 1; padding-right: 5px;">
+            <!-- Aquí se inyectarán los lugares dinámicamente -->
+        </div>
+    </div>
+</div>
 
 
      <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
