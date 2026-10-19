@@ -52,23 +52,30 @@ export function iniciarControladorUI() {
 // 🔥 EL CANDADO DEFINITIVO DE PRIVACIDAD 🔥
 export function aplicarCandadoPrivacidad(rol) {
     const tabServicio = document.querySelector('.tab[data-target="servicio-view"]');
+    const tabPrograma = document.querySelector('.tab[data-target="programa-view"]');
     
+    // 1. Mostrar Programa para TODOS (Publicadores, Conductores, Admins)
+    if (tabPrograma) {
+        tabPrograma.style.display = 'flex';
+    }
+
     if (!tabServicio) return;
 
-    // Solo la alta gerencia puede ver la pestaña
+    // 2. Mostrar Servicio SOLO para Alta Gerencia
     if (rol === 'siervo' || rol === 'ayudante') {
         tabServicio.style.display = 'flex'; 
     } else {
         // Publicadores, invitados y CONDUCTORES rebotan acá
         tabServicio.style.display = 'none';
         
-        // Medida de seguridad extra: si un conductor estaba en la pestaña, lo pateamos al mapa
+        // Medida de seguridad extra: si un publicador estaba espiando la URL, lo pateamos al mapa
         if (tabServicio.classList.contains('active')) {
             const tabMapa = document.querySelector('.tab[data-target="map-view"]');
             if (tabMapa) tabMapa.click();
         }
     }
 }
+
 
 // 🔥 LÓGICA DEL MODAL DE PUNTOS DE SALIDA 🔥
 export function inicializarModalPuntosSalida() {

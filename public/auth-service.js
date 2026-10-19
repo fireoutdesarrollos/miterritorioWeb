@@ -49,10 +49,15 @@ export function iniciarAutenticacion() {
             const email = user.email.toLowerCase();
             const userSnap = await getDoc(doc(db, "usuarios", email));
 
-            if (userSnap.exists() && userSnap.data().nombre) {
+                       if (userSnap.exists() && userSnap.data().nombre) {
                 const nombreCompleto = `${userSnap.data().nombre} ${userSnap.data().apellido || ''}`.trim();
+                
+                // 🔥 NUEVA LÍNEA: Guardamos el nombre exacto para que el Banner lo pueda leer
+                localStorage.setItem('nombre_completo_publicador', nombreCompleto);
+                
                 continuarFlujoAutenticacion(email, nombreCompleto);
             } else {
+
                 mostrarPantallaOnboarding(email, user.displayName || "");
             }
 
@@ -845,5 +850,5 @@ function manejarExpulsionORechazo() {
 function toggleContenidoApp(mostrar) {
     const dashboardSection = document.getElementById('dashboard-section');
     if (!dashboardSection) return;
-    Array.from(dashboardSection.children).forEach(child => { if (child.id !== 'contenedor-onboarding') child.style.visibility = mostrar ? 'visible' : 'hidden'; });
+    Array.from(dashboardSection.children).forEach(child => { if (child.id !== 'contenedor-onboarding') chidoc(db, 'usuarios' o collection(db, "usuarios"doc(db, 'usuarios' o collection(db, "usuarios"ld.style.visibility = mostrar ? 'visible' : 'hidden'; });
 }
