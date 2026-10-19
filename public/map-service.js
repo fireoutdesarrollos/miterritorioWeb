@@ -1,5 +1,5 @@
 // ==========================================
-// ARCHIVO: map-service.js (CORE PRINCIPAL LIMPIO)
+// ARCHIVO: map-service.js (COMPLETO Y CORREGIDO)
 // ==========================================
 import { collection, getDocs, doc, getDoc, query, where, onSnapshot, setDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { db } from "./firebase-core.js";
@@ -10,20 +10,17 @@ import {
     parsearNotasHistorial, empaquetarNotasHistorial, formatearFechaHoy, obtenerMedioDelBordeMasLargo 
 } from "./map-helpers.js";
 
-// Importamos las herramientas visuales y modales (esto también carga las funciones window.*)
+// Importamos las herramientas visuales y modales
 import { mostrarModalEditarNota, abrirNavegadorGPS } from "./ui-utils.js";
-
-
 
 window.mapaGlobal = null;
 window.pinesVisitas = [];
 let pinesAlertasGlobales = []; 
+let pinesPuntosSalida = []; // 🔥 MEMORIA PUNTOS SALIDA
 let filtroActual = 'Todos';
 let todasLasVisitas = [];
 let alertasGlobalesData = []; 
 let limitesGlobalesMap = []; 
-let pinesPuntosSalida = [];
-// 🔥 MEMORIA PARA LOS GRANDES BORDES 🔥
 
 let mapasOcupados = {}; 
 let marcadoresMicroMap = {}; 
@@ -43,7 +40,6 @@ export function refrescarEstilosMapa() {
     const ahora = Date.now();
     const tiempoLimite = 180 * 24 * 60 * 60 * 1000; // 6 meses
 
-    // 🔥 Calculamos en memoria qué territorios están 100% completos
     const territoriosTotalmenteCompletos = new Set();
     const gruposPoligonos = {};
     
@@ -103,7 +99,6 @@ export function refrescarEstilosMapa() {
 
         const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
 
-
         if (window.modoRegistroActivo && estaSeleccionadaParaRegistro) {
             fillColor = '#6200EE'; fillOpacity = 0.5; strokeColor = 'white'; strokeWeight = 3;
         } else if (mostrarProgreso && !window.modoRegistroActivo) {
@@ -113,17 +108,16 @@ export function refrescarEstilosMapa() {
         } else if (estaOcupado && puedeVerOcupacion) {
             fillColor = oscurecerColorWeb(fillColor); fillOpacity = 0.75; strokeColor = 'black'; strokeWeight = 2;
         }
-        // 🔥 Si la manzana está en borrador, forzamos un aspecto distintivo
+        
         if (feature.getProperty('es_borrador')) {
-            strokeColor = '#FF9800'; // Borde Naranja brillante
-            strokeWeight = 4;        // Más grueso para que resalte
+            strokeColor = '#FF9800'; 
+            strokeWeight = 4;        
         }
 
         return { fillColor, strokeColor, strokeWeight, fillOpacity, zIndex: 1 };
     });
 
     for (const [etiqueta, marker] of Object.entries(marcadoresMicroMap)) {
-        
         const partes = etiqueta.split('-');
         const prefijoTerritorio = partes[0].trim(); 
         
@@ -145,7 +139,6 @@ export function refrescarEstilosMapa() {
         const reporteAplica = estaOcupado ? fechaUltimoReporteManzana >= fechaAsignacion : true;
 
         const mostrarProgreso = !esta100PorCientoCompleto && esReciente && esDeEstaRonda && reporteAplica && puedeVerOcupacion;
-
 
         let textoExtra = "";
         if (mostrarProgreso && (puedeVerOcupacion || esMio)) {
@@ -379,9 +372,7 @@ export async function inicializarMapaYVisitas() {
             refrescarEstilosMapa();
 
             window.mapaGlobal.data.addListener('click', (event) => {
-                                // 🔥 Evita que se abra la ficha si el Siervo está marcando un punto de salida 🔥
-                if (window.modoUbicacionActivo) return;
-
+                if (window.modoUbicacionActivo) return; // 🔥 EVITA ABRIR FICHA SI ESTÁ BUSCANDO COORDENADAS
                 const numManzana = event.feature.getProperty('numero') || '-'; 
                 const numTerritorio = event.feature.getProperty('territorio') || '-';
                 const etiqueta = `T${numTerritorio} - ${numManzana}`;
@@ -396,16 +387,15 @@ export async function inicializarMapaYVisitas() {
 
             try {
                 const congIdLimpio = window.miUsuario.congregacionId.toString().trim();
-                // 🔥 CORREGIDO EL NOMBRE DE LA COLECCIÓN A "territorios" 🔥
                 const snapshotReal = await getDocs(collection(db, "congregaciones", congIdLimpio, "territorios")); 
                 const bounds = new google.maps.LatLngBounds();
                 const centrosMacro = {};
                 
-                limitesGlobalesMap = []; // Limpiamos la memoria antes de leer
+                limitesGlobalesMap = []; 
                 const rol = window.miUsuario.rol;
                 const esAdmin = rol === "siervo" || rol === "ayudante";
 
-               for (let documento of snapshotReal.docs) {
+                for (let documento of snapshotReal.docs) {
                     try {
                         const jsonString = documento.data().geojson;
                         if (!jsonString) continue;
@@ -413,14 +403,12 @@ export async function inicializarMapaYVisitas() {
                         const docId = documento.id.toLowerCase();
                         const parsedGeoJson = JSON.parse(jsonString);
 
-                        // 🔥 SEPARAMOS FRONTERAS DE MANZANAS EN BORRADOR 🔥
                         const esFrontera = docId.startsWith("limite_") || docId.startsWith("admin_limite_");
                         const esBorradorManzana = docId.startsWith("admin_") && !esFrontera;
 
                         if (esFrontera) {
                             const esVisible = docId.startsWith("limite_") || (docId.startsWith("admin_limite_") && esAdmin);
                             if (esVisible) {
-                                // Dibujamos la frontera azul de fondo
                                 const layerBorde = new google.maps.Data({ map: window.mapaGlobal });
                                 layerBorde.addGeoJson(parsedGeoJson);
                                 layerBorde.setStyle({ fillColor: 'transparent', strokeColor: '#1565C0', strokeWeight: 4, zIndex: 0, clickable: false });
@@ -450,11 +438,9 @@ export async function inicializarMapaYVisitas() {
                                 }
                             }
                         } else {
-                            // 🔥 SON MANZANAS (Públicas o en Borrador) 🔥
                             const esVisible = !esBorradorManzana || esAdmin;
                             if (esVisible) {
                                 const featuresAgregadas = window.mapaGlobal.data.addGeoJson(parsedGeoJson);
-                                // Si es borrador, le marcamos una etiqueta secreta para pintarla distinto luego
                                 if (esBorradorManzana) {
                                     featuresAgregadas.forEach(f => f.setProperty('es_borrador', true));
                                 }
@@ -463,10 +449,9 @@ export async function inicializarMapaYVisitas() {
                     } catch(e) { console.error("Error parseando GeoJSON de", documento.id, e) }
                 }
                 
-                // Aseguramos que las manzanas queden por encima de los bordes
                 window.mapaGlobal.data.setStyle({ zIndex: 1 });
                 
-               window.mapaGlobal.data.forEach(feature => {
+                window.mapaGlobal.data.forEach(feature => {
                     const fBounds = new google.maps.LatLngBounds(); 
                     feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
                     const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
@@ -475,7 +460,6 @@ export async function inicializarMapaYVisitas() {
                     const esBorrador = feature.getProperty('es_borrador');
                     let textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
                     
-                    // Si es borrador, le clavamos el relojito y texto naranja
                     const labelText = esBorrador ? `⏳ ${textE}` : textE;
                     const labelColor = esBorrador ? '#E65100' : 'black';
 
@@ -485,7 +469,6 @@ export async function inicializarMapaYVisitas() {
                         icon: { url: "", scaledSize: new google.maps.Size(0,0) } 
                     });
                     
-                    // IMPORTANTE: Guardamos el marcador usando la etiqueta limpia (textE) para no romper el historial
                     marcadoresMicroMap[textE] = mMicro; 
 
                     if (numTerritorio) {
@@ -515,7 +498,6 @@ export async function inicializarMapaYVisitas() {
                         marcadoresMacro.forEach(m => m.setMap(null)); 
                     }
 
-                    // 🔥 LÓGICA DE CARTELES DE FRONTERA 🔥
                     if (z < 14) {
                         limitesGlobalesMap.forEach(m => m.setMap(window.mapaGlobal));
                     } else {
@@ -523,7 +505,6 @@ export async function inicializarMapaYVisitas() {
                     }
                 });
 
-                // Si detectó manzanas, acomoda la cámara
                 if (snapshotReal.size > 0) { 
                     window.mapaGlobal.fitBounds(bounds); 
                     google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); 
@@ -536,6 +517,67 @@ export async function inicializarMapaYVisitas() {
         };
         document.head.appendChild(scriptMapa);
     }
+
+    // 🔥 LECTOR DE PUNTOS DE SALIDA 🔥
+    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+    onSnapshot(qPuntos, (snapshot) => {
+        pinesPuntosSalida.forEach(pin => pin.setMap(null));
+        pinesPuntosSalida = [];
+
+        // 🔥 NUEVO: Creamos/Actualizamos la lista invisible para el autocompletado
+        let dataList = document.getElementById('datalist-puntos-salida');
+        if (!dataList) {
+            dataList = document.createElement('datalist');
+            dataList.id = 'datalist-puntos-salida';
+            document.body.appendChild(dataList);
+        }
+        dataList.innerHTML = ''; // Limpiamos para no duplicar
+
+        if (!window.mapaGlobal) return;
+
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const puntoId = docSnap.id;
+            
+            // Agregamos el nombre a la lista del buscador
+            const opcion = document.createElement('option');
+            opcion.value = data.nombre;
+            dataList.appendChild(opcion);
+            
+            const marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: window.mapaGlobal,
+                label: {
+                    text: `${data.emoji || '📍'} ${data.nombre}`,
+                    color: '#009688',
+                    fontWeight: '900',
+                    fontSize: '14px',
+                    className: 'map-label-macro'
+                },
+                icon: { url: "", scaledSize: new google.maps.Size(0,0) },
+                zIndex: 2500
+            });
+
+            marker.addListener('click', () => {
+                if (window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante') {
+                    if (window.mostrarModalConfirmacionGlobal) {
+                        window.mostrarModalConfirmacionGlobal(
+                            "¿Eliminar Lugar de Salida?", 
+                            `¿Quieres borrar "${data.nombre}" del mapa?`, 
+                            "Sí, eliminar", 
+                            "var(--error-text)", 
+                            async () => {
+                                await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
+                                if(window.mostrarToastM3) window.mostrarToastM3("Punto de salida eliminado", "success");
+                            }
+                        );
+                    }
+                }
+            });
+
+            pinesPuntosSalida.push(marker);
+        });
+    });
 }
 
 function inicializarBandejaSiervo() {
@@ -548,17 +590,14 @@ function inicializarBandejaSiervo() {
 
     if (!btnBandeja || !vistaBandeja || !listaSolicitudes) return;
 
-    // 1. Filtro de seguridad
     if (window.miUsuario.rol !== 'siervo' && window.miUsuario.rol !== 'ayudante') {
         btnBandeja.style.display = 'none';
         return;
     }
 
-    // 🔥 ACÁ VAN LOS GATILLOS AUTOMÁTICOS (Fuera de los bucles y returns) 🔥
     mostrarPanelSugerencias();
     inicializarPlanificador();
 
-    // 2. Evento del botón de sugerencias
     if (btnSugerencias) {
         btnSugerencias.onclick = () => {
             const contenedorSug = document.getElementById('contenedor-sugerencias');
@@ -571,7 +610,6 @@ function inicializarBandejaSiervo() {
         };
     }
 
-    // 3. Lectura de Tickets Pendientes
     const qTickets = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar"), where("estado", "in", ["Pendiente", "Pendiente_Eliminar"]));
     onSnapshot(qTickets, (snapshot) => {
         listaSolicitudes.innerHTML = '';
@@ -655,59 +693,8 @@ function inicializarBandejaSiervo() {
                 listaSolicitudes.appendChild(card);
             });
         }
-            // 🔥 LECTOR DE PUNTOS DE SALIDA 🔥
-    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
-    onSnapshot(qPuntos, (snapshot) => {
-        // 1. Limpiamos los pines viejos de la pantalla
-        pinesPuntosSalida.forEach(pin => pin.setMap(null));
-        pinesPuntosSalida = [];
-
-        if (!window.mapaGlobal) return;
-
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            const puntoId = docSnap.id;
-            
-            // 2. Dibujamos el cartelito con el emoji
-            const marker = new google.maps.Marker({
-                position: { lat: data.lat, lng: data.lng },
-                map: window.mapaGlobal,
-                label: {
-                    text: `${data.emoji || '📍'} ${data.nombre}`,
-                    color: '#009688', // Color Teal para que combine con el botón
-                    fontWeight: '900',
-                    fontSize: '14px',
-                    className: 'map-label-macro' // Usamos la clase de las letras grandes
-                },
-                icon: { url: "", scaledSize: new google.maps.Size(0,0) }, // Ocultamos el pin rojo normal de Google
-                zIndex: 2500
-            });
-
-            // 3. Lógica para borrarlo al tocarlo (Solo para admins)
-            marker.addListener('click', () => {
-                if (window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante') {
-                    if (window.mostrarModalConfirmacionGlobal) {
-                        window.mostrarModalConfirmacionGlobal(
-                            "¿Eliminar Lugar de Salida?", 
-                            `¿Quieres borrar "${data.nombre}" del mapa de todos?`, 
-                            "Sí, eliminar", 
-                            "var(--error-text)", 
-                            async () => {
-                                await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
-                                if(window.mostrarToastM3) window.mostrarToastM3("Punto de salida eliminado", "success");
-                            }
-                        );
-                    } else if (confirm(`¿Eliminar el punto de salida: ${data.nombre}?`)) {
-                        deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
-                    }
-                }
-            });
-
-            pinesPuntosSalida.push(marker);
-        });
     });
 
-    // 4. Lectura de Bloqueos Activos
     if (listaActivos) {
         const qActivos = query(collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar"), where("estado", "==", "Aprobado"));
         onSnapshot(qActivos, (snapshot) => {
@@ -762,7 +749,6 @@ function inicializarBandejaSiervo() {
         });
     }
 
-    // 🔥 BANDEJA ALINEADA AL HISTORIAL NATIVO 🔥
     btnBandeja.onclick = () => {
         history.pushState({ page: 'admin_sub' }, '', '');
         document.getElementById('admin-dashboard').style.display = 'none';
@@ -774,7 +760,10 @@ function inicializarBandejaSiervo() {
         btnVolver.onclick = () => history.back();
     }
 }
+
+// ==========================================
 // LÓGICA DE REGISTRO
+// ==========================================
 const btnAvanzar = document.getElementById('btn-avanzar-registro');
 if (btnAvanzar) {
     btnAvanzar.onclick = async () => {
@@ -944,6 +933,7 @@ function renderizarVisitas() {
         if (visita.estado === 'Revisita') colorPinLista = '#4CAF50'; 
         if (visita.estado === 'Estudio') colorPinLista = '#FFEB3B'; 
         if (visita.estado === 'No visitar' || visita.estado === 'Quitar de No Visitar') colorPinLista = '#9C27B0'; 
+        if (visita.estado === 'Punto de Salida') colorPinLista = '#009688'; // 🔥 Color del punto de salida en lista
         
         const nombreMostrar = (visita.nombre === 'Nueva' && visita.apellido === 'Visita') ? 'Visita Nueva' : `${visita.nombre} ${visita.apellido}`;
         const fecha = new Date(visita.timestamp || Date.now()).toLocaleDateString();
@@ -1012,13 +1002,19 @@ function abrirFichaVisita(visita) {
             `;
             selectEstado.value = visita.estado;
         } else {
-            selectEstado.innerHTML = `
+            // 🔥 OPCIÓN PUNTO DE SALIDA PARA SIERVOS 🔥
+            const esSiervo = (window.miUsuario && window.miUsuario.rol === 'siervo');
+            let opcionesHTML = `
                 <option value="Nueva">Nueva</option>
                 <option value="Revisita">Revisita</option>
                 <option value="Ausente">Ausente</option>
                 <option value="Estudio">Estudio</option>
                 <option value="No visitar">No visitar</option>
             `;
+            if (esSiervo || visita.estado === 'Punto de Salida') {
+                opcionesHTML += `<option value="Punto de Salida">📍 Punto de Salida</option>`;
+            }
+            selectEstado.innerHTML = opcionesHTML;
             selectEstado.value = visita.estado || 'Nueva';
         }
 
@@ -1112,12 +1108,12 @@ function abrirFichaVisita(visita) {
     renderizarHistorial();
     if (gn('ficha-modal')) gn('ficha-modal').style.display = 'flex';
 }
+
 export function obtenerSugerenciasTerritorio() {
     if (!window.mapaGlobal) return { aContinuar: [], nuevos: [] };
 
     const analisisTerritorios = {};
 
-    // 1. Contabilizar el estado real y las fechas
     window.mapaGlobal.data.forEach(feature => {
         const t = feature.getProperty('territorio');
         const num = feature.getProperty('numero');
@@ -1133,17 +1129,15 @@ export function obtenerSugerenciasTerritorio() {
                 totalManzanas: 0,
                 manzanasHechas: 0,
                 fechaUltimoCierre: fechaCompletadoGlobal,
-                fechaUltimoAvance: 0 // 🔥 Memoria para saber cuándo se inició el ciclo actual
+                fechaUltimoAvance: 0
             };
         }
 
         analisisTerritorios[prefijo].totalManzanas++;
 
-        // Verificamos si esta manzana se hizo después del último cierre global
         const fechaReporteManzana = ultimosReportesPorManzana[etiqueta] || 0;
         if (fechaReporteManzana > fechaCompletadoGlobal) {
             analisisTerritorios[prefijo].manzanasHechas++;
-            // Guardamos la fecha de la última manzana reportada en este territorio
             if (fechaReporteManzana > analisisTerritorios[prefijo].fechaUltimoAvance) {
                 analisisTerritorios[prefijo].fechaUltimoAvance = fechaReporteManzana;
             }
@@ -1153,7 +1147,6 @@ export function obtenerSugerenciasTerritorio() {
     const listaAContinuar = [];
     const listaNuevos = [];
 
-    // 2. Clasificar según porcentaje de avance
     Object.values(analisisTerritorios).forEach(terr => {
         if (terr.totalManzanas === 0) return;
         
@@ -1167,27 +1160,26 @@ export function obtenerSugerenciasTerritorio() {
         }
     });
 
-    // 3. Ordenamiento estratégico
     listaAContinuar.sort((a, b) => b.porcentaje - a.porcentaje);
     listaNuevos.sort((a, b) => a.fechaUltimoCierre - b.fechaUltimoCierre);
 
     return {
-        aContinuar: listaAContinuar, // 🔥 QUITAMOS EL LÍMITE: Te trae TODOS los empezados
-        nuevos: listaNuevos.slice(0, 5) // Sugerimos el Top 5 de los más antiguos
+        aContinuar: listaAContinuar, 
+        nuevos: listaNuevos.slice(0, 5) 
     };
 }
+
 export function mostrarPanelSugerencias() {
     const sugerencias = obtenerSugerenciasTerritorio();
     const contenedor = document.getElementById('contenedor-sugerencias');
     if (!contenedor) return;
 
-    // 🔥 TRADUCTOR INTELIGENTE DE FECHAS 🔥
     const obtenerInfoDia = (timestamp) => {
         if (!timestamp || timestamp === 0) return { texto: "Desconocido", color: "var(--text-muted)" };
-        const diaNum = new Date(timestamp).getDay(); // 0 = Domingo, 6 = Sábado
-        if (diaNum === 0) return { texto: "Domingo", color: "#FFCA28" }; // Amarillo
-        if (diaNum === 6) return { texto: "Sábado", color: "#66BB6A" }; // Verde
-        return { texto: "Semana (L-V)", color: "#42A5F5" }; // Azul
+        const diaNum = new Date(timestamp).getDay(); 
+        if (diaNum === 0) return { texto: "Domingo", color: "#FFCA28" }; 
+        if (diaNum === 6) return { texto: "Sábado", color: "#66BB6A" }; 
+        return { texto: "Semana (L-V)", color: "#42A5F5" }; 
     };
 
     let html = `
@@ -1200,7 +1192,7 @@ export function mostrarPanelSugerencias() {
 
     if (sugerencias.aContinuar.length > 0) {
         html += `<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #4CAF50;">🟢 Prioridad: Terminar Iniciados (${sugerencias.aContinuar.length})</h4>
-                 <ul style="list-style:none; padding:0; margin:0 0 16px 0; max-height: 240px; overflow-y: auto; padding-right: 5px;">`;;
+                 <ul style="list-style:none; padding:0; margin:0 0 16px 0; max-height: 240px; overflow-y: auto; padding-right: 5px;">`;
         sugerencias.aContinuar.forEach(t => {
             const infoDia = obtenerInfoDia(t.fechaUltimoAvance);
             html += `
@@ -1243,8 +1235,6 @@ export function mostrarPanelSugerencias() {
     contenedor.innerHTML = html;
 }
 
- //🔥 MÓDULO DEL PLANIFICADOR DE SERVICIO INTELIGENTE 🔥
-
 function inicializarPlanificador() {
     const btnPlanificador = document.getElementById('btn-admin-planificador');
     const vistaPlanificador = document.getElementById('admin-planificador-view');
@@ -1256,18 +1246,16 @@ function inicializarPlanificador() {
 
     if (!btnPlanificador || !vistaPlanificador) return;
 
-    // Navegación
     btnPlanificador.onclick = () => {
         history.pushState({ page: 'admin_planificador' }, '', '');
         dashboard.style.display = 'none';
         vistaPlanificador.style.display = 'block';
-        if (tbody.children.length === 0) agregarFilaPlanificador(); // Fila por defecto
+        if (tbody.children.length === 0) agregarFilaPlanificador(); 
     };
 
     const btnVolver = vistaPlanificador.querySelector('.btn-volver-admin');
     if (btnVolver) btnVolver.onclick = () => history.back();
 
-    // 1. LÓGICA PARA AGREGAR FILAS (CON CALENDARIO)
     function agregarFilaPlanificador() {
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid var(--border-color)";
@@ -1282,7 +1270,8 @@ function inicializarPlanificador() {
                     <option value="Campaña">Campaña</option>
                     <option value="Revisitas">Revisitas</option>
                 </select>
-                <input type="text" class="input-lugar-plan" placeholder="Lugar/Punto..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
+                <!-- 🔥 NUEVO: Aquí se le agregó el atributo "list" para conectarlo al buscador 🔥 -->
+                <input type="text" class="input-lugar-plan" list="datalist-puntos-salida" placeholder="Buscar lugar..." style="width: 90%; margin-top: 4px; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color); font-size: 12px;">
             </td>
             <td style="padding: 8px 5px;"><input type="text" class="input-conductor-plan" placeholder="Hermano..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--bg-color); color: var(--text-color);"></td>
             <td style="padding: 8px 5px;"><input type="text" class="input-territorios-plan" placeholder="Ej: T14, T22..." style="width: 90%; padding: 6px; border-radius: 6px; border: 1px solid var(--primary-color); background: rgba(203, 164, 255, 0.1); color: var(--text-color); font-weight: bold;"></td>
@@ -1291,7 +1280,6 @@ function inicializarPlanificador() {
 
         tr.querySelector('.btn-eliminar-fila').onclick = () => tr.remove();
         
-        // Si eligen Carritos, bloqueamos el territorio
         tr.querySelector('.tipo-salida-select').onchange = (e) => {
             const inputTerr = tr.querySelector('.input-territorios-plan');
             if(e.target.value === "Carritos") {
@@ -1308,7 +1296,6 @@ function inicializarPlanificador() {
 
     if (btnAgregarFila) btnAgregarFila.onclick = agregarFilaPlanificador;
 
-    // 2. MOTOR DE IA: AUTO-SUGERIR CON ROTACIÓN CRUZADA
     if (btnSugerir) {
         btnSugerir.onclick = () => {
             const sugerencias = obtenerSugerenciasTerritorio();
@@ -1357,7 +1344,6 @@ function inicializarPlanificador() {
         };
     }
 
-    // 3. GENERADOR DEL ANUNCIO (FORMATO PDF TIPO EXCEL) - CON NOMBRE DE ARCHIVO INTELIGENTE
     if (btnGuardar) {
         btnGuardar.onclick = () => {
             try {
@@ -1373,7 +1359,6 @@ function inicializarPlanificador() {
                     return;
                 }
 
-                // 1. PROCESAMOS LAS FILAS Y FECHAS
                 const tableColumn = ["Día", "Fecha", "Hora", "Lugar / Modalidad", "Territorio", "Conductor"];
                 const tableRows = [];
                 const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -1416,34 +1401,29 @@ function inicializarPlanificador() {
                     tableRows.push([diaStr, fechaNum, hora, infoLugar, territorios, conductor]);
                 });
 
-                // 2. ARMAMOS EL TÍTULO Y EL NOMBRE DEL ARCHIVO DINÁMICO
                 let tituloPrincipal = "PROGRAMA DE PREDICACIÓN";
-                let nombreArchivo = "Predicacion_Programa.pdf"; // Por si no hay fechas
+                let nombreArchivo = "Predicacion_Programa.pdf"; 
 
                 if (fechasValidas.length > 0) {
                     fechasValidas.sort((a, b) => a - b);
                     const minDate = fechasValidas[0];
                     const maxDate = fechasValidas[fechasValidas.length - 1];
                     
-                    // Formateamos para que siempre tengan 2 dígitos (ej: "01", "09")
                     const diaMin = minDate.getDate().toString().padStart(2, '0');
                     const diaMax = maxDate.getDate().toString().padStart(2, '0');
                     const mesMin = (minDate.getMonth() + 1).toString().padStart(2, '0');
                     const mesMax = (maxDate.getMonth() + 1).toString().padStart(2, '0');
-                    const anioCorto = maxDate.getFullYear().toString().slice(-2); // Saca el "26" de 2026
+                    const anioCorto = maxDate.getFullYear().toString().slice(-2);
 
                     if (minDate.getMonth() === maxDate.getMonth()) {
-                        // Mismo mes (Ej: Predicacion_01-09_09_26.pdf)
                         tituloPrincipal += ` (Del ${minDate.getDate()} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
                         nombreArchivo = `Predicacion_${diaMin}-${diaMax}_${mesMax}_${anioCorto}.pdf`;
                     } else {
-                        // Distinto mes (Ej: Predicacion_28-08_al_03-09_26.pdf)
                         tituloPrincipal += ` (Del ${minDate.getDate()} de ${meses[minDate.getMonth()]} al ${maxDate.getDate()} de ${meses[maxDate.getMonth()]})`;
                         nombreArchivo = `Predicacion_${diaMin}-${mesMin}_al_${diaMax}-${mesMax}_${anioCorto}.pdf`;
                     }
                 }
 
-                // 3. GENERAMOS EL PDF
                 const doc = new window.jsPDF({ orientation: "landscape" }); 
                 const pageWidth = doc.internal.pageSize.getWidth();
                 
@@ -1487,7 +1467,6 @@ function inicializarPlanificador() {
                     return;
                 }
 
-                // 🔥 ACÁ USAMOS LA VARIABLE CON EL NOMBRE INTELIGENTE 🔥
                 doc.save(nombreArchivo);
                 if(window.mostrarToastM3) window.mostrarToastM3("¡Tabla PDF generada con éxito!", "success");
 
@@ -1497,340 +1476,23 @@ function inicializarPlanificador() {
             }
         };
     }
-} // <-- ¡Esta es la llave que faltaba para cerrar todo!
+}
 
-export async function inicializarMapaYVisitas() {
-    cargarListasMinisterio();
-    inicializarBandejaSiervo(); 
-
-    const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
-    onSnapshot(gestionRef, (snapshot) => {
-        mapasOcupados = {};
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            if (!data.estaDisponible) {
-                mapasOcupados[doc.id] = { asignadoA: data.asignadoA, fechaAsignacion: data.fecha || 0 };
-            }
+// ==========================================
+// MÓDULO PUNTOS DE SALIDA (MAPA)
+// ==========================================
+export async function guardarNuevoPuntoSalida(nombre, lat, lng, emoji) {
+    try {
+        const coleccionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+        await addDoc(coleccionRef, {
+            nombre: nombre.trim(),
+            lat: parseFloat(lat),
+            lng: parseFloat(lng),
+            emoji: emoji || "📍"
         });
-        refrescarEstilosMapa();
-    });
-
-    const qVisitas = query(collection(db, "usuarios", window.miUsuario.email, "mis_visitas"), where("congregacionId", "==", window.miUsuario.congregacionId));
-    onSnapshot(qVisitas, (snapshot) => {
-        todasLasVisitas = [];
-        snapshot.forEach((doc) => { todasLasVisitas.push({ id: doc.id, ...doc.data() }); });
-        todasLasVisitas.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        limpiarPinesHuerfanos();
-        renderizarVisitas();
-    });
-
-    const qAlertasGlobales = collection(db, "congregaciones", window.miUsuario.congregacionId, "solicitudes_no_visitar");
-    onSnapshot(qAlertasGlobales, (snapshot) => {
-        alertasGlobalesData = [];
-        alertasNoVisitarPorManzana = {};
-        ticketsActivosGlobales.clear(); 
-
-        snapshot.forEach(docSnap => {
-            ticketsActivosGlobales.add(docSnap.id); 
-            const data = docSnap.data();
-            data.id = docSnap.id; 
-            
-            if (data.estado === "Aprobado") {
-                alertasGlobalesData.push(data); 
-                const etiqueta = `T${data.territorio} - ${data.poligono}`;
-                alertasNoVisitarPorManzana[etiqueta] = true;
-            }
-        });
-        
-        limpiarPinesHuerfanos(); 
-        refrescarEstilosMapa();
-        renderizarAlertasGlobales(); 
-    });
-
-    const qReportes = collection(db, "congregaciones", window.miUsuario.congregacionId, "registro_actividad");
-    onSnapshot(qReportes, (snapshot) => {
-        const reportesManzanas = {};
-        const reportesTerritoriosCompletos = {};
-
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const fecha = data.fecha || 0;
-            const cobertura = data.cobertura || "Parcial";
-            const manzanas = data.manzanas || [];
-
-            manzanas.forEach(m => {
-                const fechaExistente = reportesManzanas[m] || 0;
-                if (fecha > fechaExistente) reportesManzanas[m] = fecha;
-            });
-
-            if (cobertura === "Completo") {
-                const prefijos = [...new Set(manzanas.map(m => m.split("-")[0].trim()))];
-                prefijos.forEach(prefijo => {
-                    const fechaExistente = reportesTerritoriosCompletos[prefijo] || 0;
-                    if (fecha > fechaExistente) reportesTerritoriosCompletos[prefijo] = fecha;
-                });
-            }
-        });
-
-        ultimosReportesPorManzana = reportesManzanas;
-        ultimaFechaCompletoPorTerritorio = reportesTerritoriosCompletos;
-        refrescarEstilosMapa();
-    });
-
-    document.querySelectorAll('.filtro-chip').forEach(chip => {
-        chip.addEventListener('click', (e) => {
-            document.querySelectorAll('.filtro-chip').forEach(c => c.classList.remove('active')); 
-            e.target.classList.add('active'); filtroActual = e.target.getAttribute('data-filtro'); renderizarVisitas();
-        });
-    });
-
-    const btnCerrar = document.getElementById('btn-cerrar-ficha');
-    if (btnCerrar) {
-        btnCerrar.onclick = () => { 
-            if (window.comprobarCambiosAntesDeSalir && window.comprobarCambiosAntesDeSalir()) {
-                if(window.mostrarModalCambiosSinGuardar) {
-                    window.mostrarModalCambiosSinGuardar(
-                        () => { document.getElementById('btn-guardar-ficha').click(); }, 
-                        () => { document.getElementById('ficha-modal').style.display = 'none'; } 
-                    );
-                }
-            } else {
-                document.getElementById('ficha-modal').style.display = 'none'; 
-            }
-        };
+        return true; 
+    } catch (error) {
+        console.error("Error al guardar punto:", error);
+        return false; 
     }
-
-    const btnGuardar = document.getElementById('btn-guardar-ficha');
-    if (btnGuardar) {
-        btnGuardar.onclick = async () => { /* Tu lógica de guardar visita */ };
-    }
-
-    const btnAgendar = document.getElementById('btn-agendar-visita') || document.querySelector('.btn-agendar');
-    if (btnAgendar) {
-        btnAgendar.onclick = (e) => { /* Tu lógica de agenda */ };
-    }
-
-    // 🔥 CONEXIÓN CON GOOGLE MAPS 🔥
-    const llaveSnap = await getDoc(doc(db, "configuracion", "ApiKeys"));
-    if (llaveSnap.exists()) {
-        const scriptMapa = document.createElement('script');
-        scriptMapa.src = `https://maps.googleapis.com/maps/api/js?key=${llaveSnap.data().ApiMapsWeb}&libraries=geometry`;
-        scriptMapa.async = true;
-        
-        scriptMapa.onload = async () => {
-            const mapEl = document.getElementById("map");
-            if (!mapEl) return; 
-            window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
-            refrescarEstilosMapa();
-
-            window.mapaGlobal.data.addListener('click', (event) => {
-                // 🔥 Evita que se abra la ficha si el Siervo está marcando un punto de salida 🔥
-                if (window.modoUbicacionActivo) return;
-
-                const numManzana = event.feature.getProperty('numero') || '-'; 
-                const numTerritorio = event.feature.getProperty('territorio') || '-';
-                const etiqueta = `T${numTerritorio} - ${numManzana}`;
-
-                if (window.modoRegistroActivo) {
-                    if (window.manzanasSeleccionadas.has(etiqueta)) window.manzanasSeleccionadas.delete(etiqueta); else window.manzanasSeleccionadas.add(etiqueta);
-                    document.getElementById('contador-manzanas').innerText = window.manzanasSeleccionadas.size; refrescarEstilosMapa(); 
-                } else {
-                    abrirFichaVisita({ id: Date.now().toString(), nombre: 'Nueva', apellido: 'Visita', territorio: numTerritorio, poligono: numManzana, latitud: event.latLng.lat(), longitud: event.latLng.lng(), estado: 'Nueva', direccion: '', notas: '' });
-                }
-            });
-
-            try {
-                const congIdLimpio = window.miUsuario.congregacionId.toString().trim();
-                // 🔥 CORREGIDO EL NOMBRE DE LA COLECCIÓN A "territorios" 🔥
-                const snapshotReal = await getDocs(collection(db, "congregaciones", congIdLimpio, "territorios")); 
-                const bounds = new google.maps.LatLngBounds();
-                const centrosMacro = {};
-                
-                limitesGlobalesMap = []; // Limpiamos la memoria antes de leer
-                const rol = window.miUsuario.rol;
-                const esAdmin = rol === "siervo" || rol === "ayudante";
-
-                for (let documento of snapshotReal.docs) {
-                    try {
-                        const jsonString = documento.data().geojson;
-                        if (!jsonString) continue;
-                        
-                        const docId = documento.id.toLowerCase();
-                        const parsedGeoJson = JSON.parse(jsonString);
-
-                        // 🔥 SEPARAMOS FRONTERAS DE MANZANAS EN BORRADOR 🔥
-                        const esFrontera = docId.startsWith("limite_") || docId.startsWith("admin_limite_");
-                        const esBorradorManzana = docId.startsWith("admin_") && !esFrontera;
-
-                        if (esFrontera) {
-                            const esVisible = docId.startsWith("limite_") || (docId.startsWith("admin_limite_") && esAdmin);
-                            if (esVisible) {
-                                // Dibujamos la frontera azul de fondo
-                                const layerBorde = new google.maps.Data({ map: window.mapaGlobal });
-                                layerBorde.addGeoJson(parsedGeoJson);
-                                layerBorde.setStyle({ fillColor: 'transparent', strokeColor: '#1565C0', strokeWeight: 4, zIndex: 0, clickable: false });
-
-                                const featuresArray = parsedGeoJson.features || [];
-                                if (featuresArray.length > 0) {
-                                    const feature = featuresArray[0];
-                                    if (feature.geometry && feature.geometry.type === "Polygon") {
-                                        const coordsArray = feature.geometry.coordinates[0];
-                                        const polyPoints = coordsArray.map(p => ({ lng: p[0], lat: p[1] }));
-                                        const properties = feature.properties || {};
-                                        
-                                        let nombreFrontera = properties.nombre || properties.name || "";
-                                        if (!nombreFrontera) {
-                                            const nombreLimpio = docId.replace("limite_", "").replace("admin_limite_", "").replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                                            nombreFrontera = docId.startsWith("admin_") ? `⚙️ ${nombreLimpio} (Oculto)` : `📍 ${nombreLimpio}`;
-                                        }
-
-                                        const puntoBorde = obtenerMedioDelBordeMasLargo(polyPoints);
-                                        const mCartel = new google.maps.Marker({
-                                            position: puntoBorde,
-                                            label: { text: nombreFrontera.toUpperCase(), color: 'white', fontWeight: 'bold', fontSize: '12px', className: 'cartel-frontera' },
-                                            icon: { url: "", scaledSize: new google.maps.Size(0,0) }, zIndex: 1, clickable: false
-                                        });
-                                        limitesGlobalesMap.push(mCartel);
-                                    }
-                                }
-                            }
-                        } else {
-                            // 🔥 SON MANZANAS (Públicas o en Borrador) 🔥
-                            const esVisible = !esBorradorManzana || esAdmin;
-                            if (esVisible) {
-                                const featuresAgregadas = window.mapaGlobal.data.addGeoJson(parsedGeoJson);
-                                // Si es borrador, le marcamos una etiqueta secreta para pintarla distinto luego
-                                if (esBorradorManzana) {
-                                    featuresAgregadas.forEach(f => f.setProperty('es_borrador', true));
-                                }
-                            }
-                        }
-                    } catch(e) { console.error("Error parseando GeoJSON de", documento.id, e) }
-                }
-                
-                // Aseguramos que las manzanas queden por encima de los bordes
-                window.mapaGlobal.data.setStyle({ zIndex: 1 });
-                
-                window.mapaGlobal.data.forEach(feature => {
-                    const fBounds = new google.maps.LatLngBounds(); 
-                    feature.getGeometry().forEachLatLng(p => { bounds.extend(p); fBounds.extend(p); });
-                    const numManzana = feature.getProperty('numero') || ''; const numTerritorio = feature.getProperty('territorio') || '';
-                    if (!numManzana || numManzana.toLowerCase() === 'plaza') return;
-                    
-                    const esBorrador = feature.getProperty('es_borrador');
-                    let textE = numTerritorio ? `T${numTerritorio} - ${numManzana}` : numManzana;
-                    
-                    // Si es borrador, le clavamos el relojito y texto naranja
-                    const labelText = esBorrador ? `⏳ ${textE}` : textE;
-                    const labelColor = esBorrador ? '#E65100' : 'black';
-
-                    const mMicro = new google.maps.Marker({ 
-                        position: fBounds.getCenter(), 
-                        label: { text: labelText, color: labelColor, fontWeight: '900', fontSize: '14px', className: 'map-label-micro' }, 
-                        icon: { url: "", scaledSize: new google.maps.Size(0,0) } 
-                    });
-                    
-                    // IMPORTANTE: Guardamos el marcador usando la etiqueta limpia (textE) para no romper el historial
-                    marcadoresMicroMap[textE] = mMicro; 
-
-                    if (numTerritorio) {
-                        if (!centrosMacro[numTerritorio]) centrosMacro[numTerritorio] = { latSum: 0, lngSum: 0, count: 0 };
-                        centrosMacro[numTerritorio].latSum += fBounds.getCenter().lat(); centrosMacro[numTerritorio].lngSum += fBounds.getCenter().lng(); centrosMacro[numTerritorio].count++;
-                    }
-                });
-
-                const marcadoresMacro = [];
-                Object.keys(centrosMacro).forEach(t => {
-                    const d = centrosMacro[t];
-                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: `T${t}`, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
-                });
-
-                window.mapaGlobal.addListener('zoom_changed', () => {
-                    const z = window.mapaGlobal.getZoom();
-                    if (z >= 15.5) { 
-                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(window.mapaGlobal)); 
-                        marcadoresMacro.forEach(m => m.setMap(null)); 
-                    } 
-                    else if (z >= 13) { 
-                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
-                        marcadoresMacro.forEach(m => m.setMap(window.mapaGlobal)); 
-                    } 
-                    else { 
-                        Object.values(marcadoresMicroMap).forEach(m => m.setMap(null)); 
-                        marcadoresMacro.forEach(m => m.setMap(null)); 
-                    }
-
-                    // 🔥 LÓGICA DE CARTELES DE FRONTERA 🔥
-                    if (z < 14) {
-                        limitesGlobalesMap.forEach(m => m.setMap(window.mapaGlobal));
-                    } else {
-                        limitesGlobalesMap.forEach(m => m.setMap(null));
-                    }
-                });
-
-                // Si detectó manzanas, acomoda la cámara
-                if (snapshotReal.size > 0) { 
-                    window.mapaGlobal.fitBounds(bounds); 
-                    google.maps.event.trigger(window.mapaGlobal, 'zoom_changed'); 
-                }
-            } catch (error) { console.error("Error cargando mapas: ", error); }
-
-            renderizarVisitas();
-            refrescarEstilosMapa(); 
-            renderizarAlertasGlobales(); 
-        };
-        document.head.appendChild(scriptMapa);
-    }
-
-    // 🔥 LECTOR DE PUNTOS DE SALIDA 🔥
-    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
-    onSnapshot(qPuntos, (snapshot) => {
-        // 1. Limpiamos los pines viejos de la pantalla
-        pinesPuntosSalida.forEach(pin => pin.setMap(null));
-        pinesPuntosSalida = [];
-
-        if (!window.mapaGlobal) return;
-
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            const puntoId = docSnap.id;
-            
-            // 2. Dibujamos el cartelito con el emoji
-            const marker = new google.maps.Marker({
-                position: { lat: data.lat, lng: data.lng },
-                map: window.mapaGlobal,
-                label: {
-                    text: `${data.emoji || '📍'} ${data.nombre}`,
-                    color: '#009688',
-                    fontWeight: '900',
-                    fontSize: '14px',
-                    className: 'map-label-macro'
-                },
-                icon: { url: "", scaledSize: new google.maps.Size(0,0) },
-                zIndex: 2500
-            });
-
-            // 3. Lógica para borrarlo al tocarlo (Solo para admins)
-            marker.addListener('click', () => {
-                if (window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante') {
-                    if (window.mostrarModalConfirmacionGlobal) {
-                        window.mostrarModalConfirmacionGlobal(
-                            "¿Eliminar Lugar de Salida?", 
-                            `¿Quieres borrar "${data.nombre}" del mapa de todos?`, 
-                            "Sí, eliminar", 
-                            "var(--error-text)", 
-                            async () => {
-                                await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
-                                if(window.mostrarToastM3) window.mostrarToastM3("Punto de salida eliminado", "success");
-                            }
-                        );
-                    } else if (confirm(`¿Eliminar el punto de salida: ${data.nombre}?`)) {
-                        deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
-                    }
-                }
-            });
-
-            pinesPuntosSalida.push(marker);
-        });
-    });
 }
