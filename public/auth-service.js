@@ -850,5 +850,5 @@ function manejarExpulsionORechazo() {
 function toggleContenidoApp(mostrar) {
     const dashboardSection = document.getElementById('dashboard-section');
     if (!dashboardSection) return;
-    Array.from(dashboardSection.children).forEach(child => { if (child.id !== 'contenedor-onboarding') chidoc(db, 'usuarios' o collection(db, "usuarios"doc(db, 'usuarios' o collection(db, "usuarios"ld.style.visibility = mostrar ? 'visible' : 'hidden'; });
+    Array.from(dashboardSection.children).forEach(child => { if (child.id !== 'contenedor-onboarding') child.style.visibility = mostrar ? 'visible' : 'hidden'; });
 }
