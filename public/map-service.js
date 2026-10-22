@@ -518,65 +518,124 @@ export async function inicializarMapaYVisitas() {
         document.head.appendChild(scriptMapa);
     }
 
-    // 🔥 LECTOR DE PUNTOS DE SALIDA 🔥
-    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
-    onSnapshot(qPuntos, (snapshot) => {
+   // Función para igualar textos ignorando tildes y mayúsculas
+    function normalizarLugar(texto) {
+        if (!texto) return "";
+        return texto.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    let todosLosPuntosGuardados = [];
+    let lugaresActivosHoy = new Set();
+
+    function actualizarPinesEnMapa() {
         pinesPuntosSalida.forEach(pin => pin.setMap(null));
         pinesPuntosSalida = [];
+        if (!window.mapaGlobal) return;
 
-        // 🔥 NUEVO: Creamos/Actualizamos la lista invisible para el autocompletado
+        const esAdmin = window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante';
+
+        todosLosPuntosGuardados.forEach(data => {
+            // 🔥 AHORA COMPARA LOS TEXTOS NORMALIZADOS
+            const estaActivo = lugaresActivosHoy.has(normalizarLugar(data.nombre));
+
+            if (!estaActivo && !esAdmin) return;
+
+            const marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: window.mapaGlobal,
+                label: {
+                    text: `${data.emoji || '📍'} ${data.nombre}`,
+                    color: estaActivo ? '#009688' : 'gray',
+                    fontWeight: '900',
+                    fontSize: '14px',
+                    className: 'map-label-macro'
+                },
+                icon: { url: "", scaledSize: new google.maps.Size(0,0) },
+                zIndex: estaActivo ? 2600 : 2400,
+                opacity: estaActivo ? 1.0 : 0.4 
+            });
+
+            marker.addListener('click', () => {
+                if (esAdmin) {
+                    if (window.mostrarModalConfirmacionGlobal) {
+                        window.mostrarModalConfirmacionGlobal("¿Eliminar Lugar?", `¿Borrar "${data.nombre}"?`, "Sí, eliminar", "var(--error-text)", async () => {
+                            await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", data.id));
+                            if(window.mostrarToastM3) window.mostrarToastM3("Punto eliminado", "success");
+                        });
+                    }
+                }
+            });
+            pinesPuntosSalida.push(marker);
+        });
+    }
+
+    onSnapshot(planificadorRef, (docSnap) => {
+        lugaresActivosHoy.clear();
+        if (docSnap.exists()) {
+            const salidas = docSnap.data().salidas || [];
+            const ahora = Date.now();
+            salidas.forEach(salida => {
+                const date = new Date(salida.fechaMillis);
+                if (salida.horaStr && salida.horaStr.includes(":")) {
+                    const partes = salida.horaStr.split(":");
+                    date.setHours(parseInt(partes[0], 10), parseInt(partes[1], 10), 0, 0);
+                }
+                const limite = date.getTime() + (2 * 60 * 60 * 1000); 
+                if (ahora <= limite && salida.lugar) {
+                    lugaresActivosHoy.add(normalizarLugar(salida.lugar)); // 🔥 GUARDA NORMALIZADO
+                }
+            });
+        }
+        actualizarPinesEnMapa();
+    });
+    
+
+    // 1. Escuchamos el programa en vivo y anotamos qué lugares siguen vigentes
+    onSnapshot(planificadorRef, (docSnap) => {
+        lugaresActivosHoy.clear();
+        if (docSnap.exists()) {
+            const salidas = docSnap.data().salidas || [];
+            const ahora = Date.now();
+            
+            salidas.forEach(salida => {
+                const date = new Date(salida.fechaMillis);
+                if (salida.horaStr && salida.horaStr.includes(":")) {
+                    const partes = salida.horaStr.split(":");
+                    date.setHours(parseInt(partes[0], 10), parseInt(partes[1], 10), 0, 0);
+                }
+                const limite = date.getTime() + (2 * 60 * 60 * 1000); // 2 horas de vida
+                
+                if (ahora <= limite && salida.lugar) {
+                    lugaresActivosHoy.add(salida.lugar); // ¡Este lugar sobrevive!
+                }
+            });
+        }
+        actualizarPinesEnMapa();
+    });
+
+    // 2. Escuchamos el catálogo de puntos guardados
+    onSnapshot(qPuntos, (snapshot) => {
+        todosLosPuntosGuardados = [];
+
         let dataList = document.getElementById('datalist-puntos-salida');
         if (!dataList) {
             dataList = document.createElement('datalist');
             dataList.id = 'datalist-puntos-salida';
             document.body.appendChild(dataList);
         }
-        dataList.innerHTML = ''; // Limpiamos para no duplicar
-
-        if (!window.mapaGlobal) return;
+        dataList.innerHTML = ''; 
 
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
-            const puntoId = docSnap.id;
-            
-            // Agregamos el nombre a la lista del buscador
+            data.id = docSnap.id;
+            todosLosPuntosGuardados.push(data);
+
             const opcion = document.createElement('option');
             opcion.value = data.nombre;
             dataList.appendChild(opcion);
-            
-            const marker = new google.maps.Marker({
-                position: { lat: data.lat, lng: data.lng },
-                map: window.mapaGlobal,
-                label: {
-                    text: `${data.emoji || '📍'} ${data.nombre}`,
-                    color: '#009688',
-                    fontWeight: '900',
-                    fontSize: '14px',
-                    className: 'map-label-macro'
-                },
-                icon: { url: "", scaledSize: new google.maps.Size(0,0) },
-                zIndex: 2500
-            });
-
-            marker.addListener('click', () => {
-                if (window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante') {
-                    if (window.mostrarModalConfirmacionGlobal) {
-                        window.mostrarModalConfirmacionGlobal(
-                            "¿Eliminar Lugar de Salida?", 
-                            `¿Quieres borrar "${data.nombre}" del mapa?`, 
-                            "Sí, eliminar", 
-                            "var(--error-text)", 
-                            async () => {
-                                await deleteDoc(doc(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida", puntoId));
-                                if(window.mostrarToastM3) window.mostrarToastM3("Punto de salida eliminado", "success");
-                            }
-                        );
-                    }
-                }
-            });
-
-            pinesPuntosSalida.push(marker);
         });
+        
+        actualizarPinesEnMapa();
     });
 }
 

@@ -23,23 +23,36 @@ function calcularLimiteVigencia(fechaMillis, horaStr) {
     return date.getTime() + (2 * 60 * 60 * 1000);
 }
 
-// 🔥 3. Escucha la base de datos en tiempo real
+// 🔥 3. Escucha la base de datos en tiempo real (CON DETECTOR DE ERRORES)
 export function inicializarProgramaPublico() {
-    const congId = localStorage.getItem('cong_id') || localStorage.getItem('congregacion_id');
-    if (!congId) return;
+    console.log("🟡 Iniciando motor de Programa...");
+    
+    // Agregué un par de llaves más por si tu app guarda la congregación con otro nombre
+const congId = localStorage.getItem('miCongregacionId');    
+    if (!congId) {
+        console.error("🔴 Error: No se encontró el ID de la congregación en localStorage.");
+        const contenedor = document.getElementById('lista-programa-publico');
+        if(contenedor) contenedor.innerHTML = `<p style="color: #E53935; text-align: center; margin-top: 40px;">⚠️ Error interno: No se detectó tu congregación.</p>`;
+        return;
+    }
 
+    console.log("🟢 Congregación ID encontrada:", congId);
     const planificadorRef = doc(db, 'congregaciones', congId, 'planificador', 'semana_actual');
     
     onSnapshot(planificadorRef, (docSnap) => {
+        console.log("🟢 Respuesta de Firebase recibida. ¿Existe el documento?:", docSnap.exists());
         if (docSnap.exists()) {
             const data = docSnap.data();
             procesarSalidas(data.salidas || []);
         } else {
             renderizarPrograma([]);
         }
+    }, (error) => {
+        console.error("🔴 Firebase bloqueó la lectura:", error);
+        const contenedor = document.getElementById('lista-programa-publico');
+        if(contenedor) contenedor.innerHTML = `<p style="color: #E53935; text-align: center; margin-top: 40px;">⚠️ Permiso denegado al leer el programa.</p>`;
     });
 }
-
 // 🔥 4. Procesa y filtra las salidas
 function procesarSalidas(salidas) {
     const ahora = Date.now();
