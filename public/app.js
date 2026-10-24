@@ -101,9 +101,12 @@ window.addEventListener('popstate', (event) => {
     if (cerramosAlgo) {
         history.pushState({ escudo: true }, null, null);
     } else {
-        const tabMapa = document.querySelector('.tab[data-target="map-view"]');
-        if (tabMapa && !tabMapa.classList.contains('active')) {
-            tabMapa.click();
+        // 🔥 AJUSTE PARA LA NUEVA BARRA INFERIOR (ESTILO JW LIBRARY) 🔥
+        // Busca el elemento .nav-item en lugar de .tab (soporta 'map-view' o 'vista-mapa')
+        const btnMapa = document.querySelector('.nav-item[data-target="map-view"]') || document.querySelector('.nav-item[data-target="vista-mapa"]');
+        
+        if (btnMapa && !btnMapa.classList.contains('active')) {
+            btnMapa.click(); // Dispara el click simulado para que cambie de vista
             history.pushState({ escudo: true }, null, null);
         }
     }
