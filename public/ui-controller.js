@@ -4,18 +4,19 @@
 import { guardarNuevoPuntoSalida } from './map-service.js';
 
 export function iniciarControladorUI() {
-    // 1. Manejo de Pestañas (Tabs)
-    const tabs = document.querySelectorAll('.tab');
+    // 1. Manejo de Pestañas (NUEVA BOTTOM NAVIGATION BAR M3)
+    const navItems = document.querySelectorAll('.nav-item');
     const views = document.querySelectorAll('.view-section');
 
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+    navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault(); 
             history.pushState({ page: 'tab' }, '', '');
             
-            tabs.forEach(t => t.classList.remove('active')); 
+            navItems.forEach(t => t.classList.remove('active')); 
             views.forEach(v => v.style.display = 'none');
             
-            // 🔥 Aseguramos que al cambiar de pestaña principal, las sub-vistas del Siervo se oculten
+            // Aseguramos que al cambiar de pestaña principal, las sub-vistas del Siervo se oculten
             const vistaSoli = document.getElementById('admin-solicitudes-view');
             if(vistaSoli) vistaSoli.style.display = 'none';
             
@@ -35,12 +36,16 @@ export function iniciarControladorUI() {
             const dashboardAdmin = document.getElementById('admin-dashboard');
             if(dashboardAdmin) dashboardAdmin.style.display = 'flex';
             
-            tab.classList.add('active'); 
-            const tId = tab.getAttribute('data-target'); 
+            item.classList.add('active'); 
+            const tId = item.getAttribute('data-target'); 
             const tView = document.getElementById(tId);
             
-            if (tId === 'map-view' && tView) tView.style.display = 'flex'; 
-            else if (tView) tView.style.display = 'block';
+            // Soporte dual para IDs viejos y nuevos
+            if ((tId === 'map-view' || tId === 'vista-mapa') && tView) {
+                tView.style.display = 'flex'; 
+            } else if (tView) {
+                tView.style.display = 'block';
+            }
         });
     });
 
@@ -49,15 +54,14 @@ export function iniciarControladorUI() {
     if (btnCerrarFicha) btnCerrarFicha.onclick = () => history.back();
    
     inicializarModalListaPuntos();
-} // <-- Esta es la llave de cierre de iniciarControladorUI
-
+}
 
 // 🔥 EL CANDADO DEFINITIVO DE PRIVACIDAD 🔥
 export function aplicarCandadoPrivacidad(rol) {
-    const tabServicio = document.querySelector('.tab[data-target="servicio-view"]');
-    const tabPrograma = document.querySelector('.tab[data-target="programa-view"]');
+    const tabServicio = document.querySelector('.nav-item[data-target="servicio-view"]') || document.querySelector('.nav-item[data-target="vista-planificador"]');
+    const tabPrograma = document.querySelector('.nav-item[data-target="programa-view"]') || document.querySelector('.nav-item[data-target="vista-territorios"]');
     
-    // 1. Mostrar Programa para TODOS (Publicadores, Conductores, Admins)
+    // 1. Mostrar Programa para TODOS
     if (tabPrograma) {
         tabPrograma.style.display = 'flex';
     }
@@ -71,21 +75,19 @@ export function aplicarCandadoPrivacidad(rol) {
         // Publicadores, invitados y CONDUCTORES rebotan acá
         tabServicio.style.display = 'none';
         
-        // Medida de seguridad extra: si un publicador estaba espiando la URL, lo pateamos al mapa
+        // Si estaba espiando la URL, lo pateamos al mapa
         if (tabServicio.classList.contains('active')) {
-            const tabMapa = document.querySelector('.tab[data-target="map-view"]');
+            const tabMapa = document.querySelector('.nav-item[data-target="map-view"]') || document.querySelector('.nav-item[data-target="vista-mapa"]');
             if (tabMapa) tabMapa.click();
         }
     }
 }
-
 
 // 🔥 LÓGICA DEL MODAL DE PUNTOS DE SALIDA 🔥
 export function inicializarModalPuntosSalida() {
     const modalPunto = document.getElementById('modal-punto-salida');
     if (!modalPunto) return;
     
-    // 1. Abrir modal
     const btnAbrir = document.getElementById('btn-abrir-modal-punto');
     if (btnAbrir) {
         btnAbrir.addEventListener('click', () => {
@@ -94,7 +96,6 @@ export function inicializarModalPuntosSalida() {
         });
     }
 
-    // 2. Cerrar modal
     const btnCancelar = document.getElementById('btn-cancelar-punto');
     if (btnCancelar) {
         btnCancelar.addEventListener('click', () => {
@@ -103,43 +104,36 @@ export function inicializarModalPuntosSalida() {
         });
     }
 
-    // 🔥 3. Lógica de buscar en el mapa (CON BOTÓN CANCELAR) 🔥
+    // 3. Lógica de buscar en el mapa (CON BOTÓN CANCELAR)
     const btnElegirMapa = document.getElementById('btn-elegir-mapa-punto');
     if (btnElegirMapa) {
         btnElegirMapa.addEventListener('click', () => {
-            // Ocultamos el modal y activamos el "Modo Ubicación"
             modalPunto.style.display = 'none';
             window.modoUbicacionActivo = true; 
             
-            // Creamos un cartel flotante avisando (ahora interactivo)
             const banner = document.createElement('div');
             banner.id = 'banner-ubicacion';
-            banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #2196F3; color: white; padding: 10px 20px; border-radius: 30px; font-weight: bold; z-index: 5000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: fadeIn 0.3s; display: flex; align-items: center; gap: 12px;';
+            banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #2196F3; color: white; padding: 10px 20px; border-radius: 30px; font-weight: bold; z-index: 5000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 12px;';
             banner.innerHTML = `
                 <span>👇 Toca el lugar exacto</span>
                 <button id="btn-cancelar-ubicacion" style="background: rgba(255,255,255,0.25); border: none; color: white; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer;">Cancelar</button>
             `;
             document.body.appendChild(banner);
             
-            // Declaramos las variables de los listeners
             let list1, list2;
 
-            // Función para atrapar el clic, guardar coords y restaurar todo
             const atraparClic = (lat, lng) => {
                 if(!window.modoUbicacionActivo) return;
-                window.modoUbicacionActivo = false; // Apagamos el modo
-                banner.remove(); // Quitamos el cartel
+                window.modoUbicacionActivo = false; 
+                banner.remove(); 
                 
-                // Llenamos los datos invisibles y mostramos un check verde
                 document.getElementById('punto-lat').value = lat;
                 document.getElementById('punto-lng').value = lng;
                 document.getElementById('punto-coords').value = 'Coordenadas capturadas ✅';
                 
-                // Volvemos a abrir el modal
                 modalPunto.style.display = 'flex';
             };
 
-            // Escuchamos UN SOLO clic en el mapa base o en una manzana
             list1 = window.mapaGlobal.addListener('click', (e) => {
                 atraparClic(e.latLng.lat(), e.latLng.lng());
                 google.maps.event.removeListener(list1);
@@ -152,14 +146,13 @@ export function inicializarModalPuntosSalida() {
                 google.maps.event.removeListener(list2);
             });
 
-            // Lógica para el botón de cancelar
             document.getElementById('btn-cancelar-ubicacion').addEventListener('click', (e) => {
-                e.stopPropagation(); // Evita que esto cuente como un clic en el mapa
+                e.stopPropagation(); 
                 window.modoUbicacionActivo = false;
                 banner.remove();
                 google.maps.event.removeListener(list1);
                 google.maps.event.removeListener(list2);
-                modalPunto.style.display = 'flex'; // Volvemos a abrir el modal sin cambios
+                modalPunto.style.display = 'flex'; 
             });
         });
     }
@@ -191,7 +184,7 @@ export function inicializarModalPuntosSalida() {
                 document.getElementById('punto-coords').value = '';
                 document.getElementById('punto-emoji').value = '📍';
                 
-                if(window.mostrarToastM3) window.mostrarToastM3("Lugar guardado. Ya debería aparecer en el mapa.", "success");
+                if(window.mostrarToastM3) window.mostrarToastM3("Lugar guardado.", "success");
             } else {
                 alert("Hubo un error al guardar.");
             }
@@ -201,6 +194,7 @@ export function inicializarModalPuntosSalida() {
         });
     }
 }
+
 // 🔥 LÓGICA DE LA LISTA DE PUNTOS DE SALIDA 🔥
 export function inicializarModalListaPuntos() {
     const modalLista = document.getElementById('modal-lista-puntos');
@@ -210,7 +204,6 @@ export function inicializarModalListaPuntos() {
 
     if (!modalLista || !btnAbrir || !contenedor) return;
 
-    // Abrir modal y cargar datos de Firebase
     btnAbrir.addEventListener('click', async () => {
         modalLista.style.display = 'flex';
         contenedor.innerHTML = '<p style="text-align:center; color:gray; font-size: 14px;">Cargando lugares...</p>';
@@ -243,7 +236,6 @@ export function inicializarModalListaPuntos() {
                     <button class="btn-borrar-punto" style="background: rgba(229, 57, 53, 0.1); border: 1px solid #E53935; color: #E53935; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: bold;">🗑️ Borrar</button>
                 `;
 
-                // Lógica para borrar
                 card.querySelector('.btn-borrar-punto').onclick = async () => {
                     if (confirm(`¿Seguro que quieres eliminar "${data.nombre}"?`)) {
                         card.style.opacity = '0.4';
@@ -267,7 +259,6 @@ export function inicializarModalListaPuntos() {
         }
     });
 
-    // Cerrar modal
     if (btnCerrar) {
         btnCerrar.addEventListener('click', () => {
             modalLista.style.display = 'none';
