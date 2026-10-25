@@ -103,135 +103,79 @@
                         <p style="color: gray; text-align: center; margin-top: 40px;">Cargando programa...</p>
                     </div>
                 </div>
-                <div id="servicio-view" class="view-section" style="display: none; padding: 0; overflow-y: auto;">
-    
-    <!-- NUEVAS PESTAÑAS SUPERIORES -->
-    <div class="top-tabs-container">
-        <button class="top-tab active" data-target="admin-planificador-view">Planificador</button>
-        <button class="top-tab" data-target="admin-solicitudes-view">Solicitudes <span id="badge-solicitudes" style="display:none; background:red; color:white; border-radius:50%; padding:2px 6px; font-size:10px;">0</span></button>
-        <button class="top-tab" data-target="admin-inventario-view">Territorios</button>
-        <button class="top-tab" data-target="admin-reportes-view">Reportes</button>
-        <button class="top-tab" data-target="admin-roles-view">Permisos</button>
-    </div>
-
-    <!-- CONTENEDORES DE LAS SUB-VISTAS (Sin botones de volver y con un poco de padding) -->
-    <div style="padding: 16px; padding-bottom: 80px;">
-        
-        <div id="admin-planificador-view" class="admin-sub-view" style="display: block;">
-            <h3 style="color: var(--primary-color); margin-top:0;">Planificador Semanal</h3>
-            <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">📍 Añadir lugar</button>
-            <button id="btn-abrir-lista-puntos" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 5px;">📋 Gestionar Lugares</button>
-            
-            <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-x: auto; margin-top: 10px;">
-                <!-- (Aquí va tu tabla del planificador intacta...) -->
-                <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 14px;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid var(--primary-color);">
-                            <th style="padding: 10px 5px;">Día/Fecha</th>
-                            <th style="padding: 10px 5px;">Hora</th>
-                            <th style="padding: 10px 5px;">Tipo/Lugar</th>
-                            <th style="padding: 10px 5px;">Conductor</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-planificador"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="admin-solicitudes-view" class="admin-sub-view" style="display: none;">
-            <h3 style="color: var(--primary-color); margin-top:0;">Alertas "No Visitar"</h3>
-            <div id="lista-solicitudes"></div>
-            <div id="lista-bloqueos-activos"></div>
-        </div>
-
-        <div id="admin-inventario-view" class="admin-sub-view" style="display: none;">
-            <h3 style="color: var(--primary-color); margin-top:0;">Inventario de Mapas</h3>
-            <div id="lista-inventario"></div>
-        </div>
-
-        <div id="admin-reportes-view" class="admin-sub-view" style="display: none;">
-            <h3 style="color: var(--primary-color); margin-top:0;">Historial y Estadísticas</h3>
-            <div id="lista-reportes"></div>
-        </div>
-
-        <div id="admin-roles-view" class="admin-sub-view" style="display: none;">
-            <h3 style="color: var(--primary-color); margin-top:0;">Gestión de Accesos</h3>
-            <div id="lista-roles"></div>
-        </div>
-        
-    </div>
-</div>
-
-
-                    <!-- Todas las subvistas de admin se mantienen igual, solo dejamos el esqueleto -->
-                    <div id="admin-solicitudes-view" style="display: none;">
-                        <button class="btn-volver-admin">⬅ Volver al Panel</button>
-                        <h3 style="color: var(--primary-color);">Alertas "No Visitar"</h3>
-                        <h4 style="color: white; margin-top: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 16px;">⏳ Pendientes</h4>
-                        <div id="lista-solicitudes"></div>
-                        <h4 style="color: white; margin-top: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 16px;">⛔ Activos</h4>
-                        <div id="lista-bloqueos-activos"></div>
+                                <div id="servicio-view" class="view-section" style="display: none; padding: 0; overflow-y: auto;">
+                    
+                    <!-- NUEVAS PESTAÑAS SUPERIORES -->
+                    <div class="top-tabs-container">
+                        <button class="top-tab active" id="btn-admin-planificador" data-target="admin-planificador-view">Planificador</button>
+                        <button class="top-tab" id="btn-admin-solicitudes" data-target="admin-solicitudes-view">Solicitudes <span id="badge-solicitudes" style="display:none; background:red; color:white; border-radius:50%; padding:2px 6px; font-size:10px;">0</span></button>
+                        <button class="top-tab" id="btn-admin-inventario" data-target="admin-inventario-view">Territorios</button>
+                        <button class="top-tab" id="btn-admin-reportes" data-target="admin-reportes-view">Reportes</button>
+                        <button class="top-tab" id="btn-admin-roles" data-target="admin-roles-view">Permisos</button>
                     </div>
 
-                    <div id="admin-planificador-view" style="display: none;">
-                        <button class="btn-volver-admin">⬅ Volver al Panel</button>
-                        <h3 style="color: var(--primary-color);">Planificador de Servicio</h3>
-                        <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 5px;">📍 Añadir lugar al mapa </button>
-<<<<<<< HEAD
-=======
-                        <button id="btn-abrir-lista-puntos" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 10px;">📋 Gestionar Lugares</button>
-
-                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
-                            Arma el programa semanal. Las sugerencias se basan en el trabajo real del mapa.
-                        </p>
->>>>>>> 0e480fce6f30b903ef10ddf63436d7701410f980
+                    <!-- CONTENEDORES DE LAS SUB-VISTAS -->
+                    <div style="padding: 16px; padding-bottom: 90px;">
                         
-                        <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-x: auto;">
-                            <table style="width: 100%; text-align: left; border-collapse: collapse; min-width: 600px; color: var(--text-color); font-size: 14px;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid var(--primary-color);">
-                                        <th style="padding: 10px 5px;">Día/Fecha</th>
-                                        <th style="padding: 10px 5px;">Hora</th>
-                                        <th style="padding: 10px 5px;">Tipo / Lugar</th>
-                                        <th style="padding: 10px 5px;">Conductor</th>
-                                        <th style="padding: 10px 5px;">Territorios</th>
-                                        <th style="padding: 10px 5px;"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-planificador"></tbody>
-                            </table>
-                            <datalist id="lista-lugares-salida"></datalist>
+                        <div id="admin-planificador-view" class="admin-sub-view" style="display: block;">
+                            <h3 style="color: var(--primary-color); margin-top:0;">Planificador de Servicio</h3>
+                            <button id="btn-abrir-modal-punto" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 5px;">📍 Añadir lugar al mapa</button>
+                            <button id="btn-abrir-lista-puntos" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 5px;">📋 Gestionar Lugares</button>
                             
-                            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                                <button id="btn-agregar-fila-plan" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1;">+ Salida</button>
-                                <button id="btn-sugerir-plan" style="background: var(--primary-color); border: none; color: white; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 2;">💡 Auto-Sugerir Territorios</button>
+                            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+                                Arma el programa semanal. Las sugerencias se basan en el trabajo real del mapa.
+                            </p>
+                            
+                            <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-x: auto;">
+                                <table style="width: 100%; text-align: left; border-collapse: collapse; min-width: 600px; color: var(--text-color); font-size: 14px;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--primary-color);">
+                                            <th style="padding: 10px 5px;">Día/Fecha</th>
+                                            <th style="padding: 10px 5px;">Hora</th>
+                                            <th style="padding: 10px 5px;">Tipo / Lugar</th>
+                                            <th style="padding: 10px 5px;">Conductor</th>
+                                            <th style="padding: 10px 5px;">Territorios</th>
+                                            <th style="padding: 10px 5px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-planificador"></tbody>
+                                </table>
+                                <datalist id="lista-lugares-salida"></datalist>
+                                
+                                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                    <button id="btn-agregar-fila-plan" style="background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1;">+ Salida</button>
+                                    <button id="btn-sugerir-plan" style="background: var(--primary-color); border: none; color: white; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 2;">💡 Auto-Sugerir Territorios</button>
+                                </div>
                             </div>
+                            <button id="btn-guardar-plan" style="width: 100%; background: #4CAF50; border: none; color: white; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);">Guardar y Generar Anuncio</button>
                         </div>
-                        <button id="btn-guardar-plan" style="width: 100%; background: #4CAF50; border: none; color: white; padding: 14px; border-radius: 12px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);">Guardar y Generar Anuncio</button>
-                    </div>
 
-                    <div id="admin-inventario-view" style="display: none;">
-                        <button class="btn-volver-admin">⬅ Volver al Panel</button>
-                        <h3 style="color: var(--primary-color);">Inventario de Mapas</h3>
-                        <div id="lista-inventario"></div>
-                    </div>
+                        <div id="admin-solicitudes-view" class="admin-sub-view" style="display: none;">
+                            <h3 style="color: var(--primary-color); margin-top:0;">Alertas "No Visitar"</h3>
+                            <h4 style="color: white; margin-top: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 16px;">⏳ Pendientes</h4>
+                            <div id="lista-solicitudes"></div>
+                            <h4 style="color: white; margin-top: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 16px;">⛔ Activos</h4>
+                            <div id="lista-bloqueos-activos"></div>
+                        </div>
 
-                    <div id="admin-reportes-view" style="display: none;">
-                        <button class="btn-volver-admin">⬅ Volver al Panel</button>
-                        <h3 style="color: var(--primary-color);">Historial de Actividad</h3>
-                        <div id="lista-reportes"></div>
-                    </div>
+                        <div id="admin-inventario-view" class="admin-sub-view" style="display: none;">
+                            <h3 style="color: var(--primary-color); margin-top:0;">Inventario de Mapas</h3>
+                            <div id="lista-inventario"></div>
+                        </div>
 
-                    <div id="admin-roles-view" style="display: none;">
-                        <button class="btn-volver-admin">⬅ Volver al Panel</button>
-                        <h3 style="color: var(--primary-color);">Gestión de Accesos</h3>
-                        <div id="lista-roles"></div>
+                        <div id="admin-reportes-view" class="admin-sub-view" style="display: none;">
+                            <h3 style="color: var(--primary-color); margin-top:0;">Historial de Actividad</h3>
+                            <div id="lista-reportes"></div>
+                        </div>
+
+                        <div id="admin-roles-view" class="admin-sub-view" style="display: none;">
+                            <h3 style="color: var(--primary-color); margin-top:0;">Gestión de Accesos</h3>
+                            <div id="lista-roles"></div>
+                        </div>
+                        
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    
+
     <!-- Mantenemos ocultos los modales existentes (Ficha, Cronómetro, etc) para no romper nada -->
         <div id="asignar-modal" class="modal-overlay" style="display: none; z-index: 3000;">
         <div style="background: var(--surface-color); width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid var(--border-color);">
