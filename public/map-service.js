@@ -368,8 +368,15 @@ export async function inicializarMapaYVisitas() {
         scriptMapa.onload = async () => {
             const mapEl = document.getElementById("map");
             if (!mapEl) return; 
-            window.mapaGlobal = new google.maps.Map(mapEl, { disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false });
-            refrescarEstilosMapa();
+            window.mapaGlobal = new google.maps.Map(mapEl, { 
+    disableDefaultUI: true, 
+    zoomControl: false, 
+    mapTypeControl: false, 
+    streetViewControl: false,
+    gestureHandling: 'greedy' // 🔥 Permite mover el mapa con 1 solo dedo
+});
+refrescarEstilosMapa();
+
 
             window.mapaGlobal.data.addListener('click', (event) => {
                 if (window.modoUbicacionActivo) return; // 🔥 EVITA ABRIR FICHA SI ESTÁ BUSCANDO COORDENADAS
