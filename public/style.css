@@ -425,3 +425,21 @@ body {
 .nav-item.active {
   color: #4a5c9a; /* Un color institucional/sobrio (ajusta al tema de tu app) */
 }
+/* 🔥 AJUSTE PARA QUE EL MAPA NO CHOQUE CON LA BARRA INFERIOR 🔥 */
+
+/* Sube el botón morado de la tablita */
+#btn-fab-registro, 
+.fab-button {
+    bottom: 90px !important;
+    z-index: 900 !important;
+}
+
+/* Sube el cartel blanco que aparece para elegir "Parcial" o "Completo" */
+#panel-registro {
+    bottom: 90px !important;
+}
+
+/* Opcional: Si tienes los botones de Zoom de Google Maps activados, los sube también */
+.gmnoprint, .gm-control-active {
+    margin-bottom: 75px !important;
+}
