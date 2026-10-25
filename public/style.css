@@ -443,3 +443,37 @@ body {
 .gmnoprint, .gm-control-active {
     margin-bottom: 75px !important;
 }
+/* Pestañas Superiores (Top Tabs) para Admin */
+.top-tabs-container {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    background-color: var(--bg-color, #ffffff);
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    -webkit-overflow-scrolling: touch; /* Suavidad en iOS */
+}
+
+/* Ocultar barra de scroll en la tira de pestañas */
+.top-tabs-container::-webkit-scrollbar {
+    display: none;
+}
+
+.top-tab {
+    background: none;
+    border: none;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #757575; /* Inactivo */
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.top-tab.active {
+    color: var(--primary-color, #6200EE);
+    border-bottom: 2px solid var(--primary-color, #6200EE);
+}

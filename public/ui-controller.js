@@ -265,3 +265,23 @@ export function inicializarModalListaPuntos() {
         });
     }
 }
+document.addEventListener('DOMContentLoaded', () => {
+    const topTabs = document.querySelectorAll('.top-tab');
+    const adminSubViews = document.querySelectorAll('.admin-sub-view');
+
+    topTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // 1. Apagar todas las pestañas y vistas
+            topTabs.forEach(t => t.classList.remove('active'));
+            adminSubViews.forEach(v => v.style.display = 'none');
+
+            // 2. Encender la seleccionada
+            tab.classList.add('active');
+            const targetId = tab.getAttribute('data-target');
+            document.getElementById(targetId).style.display = 'block';
+            
+            // 3. Opcional: Centrar la pestaña clickeada al hacer scroll horizontal
+            tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        });
+    });
+});
