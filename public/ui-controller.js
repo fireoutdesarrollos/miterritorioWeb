@@ -388,3 +388,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Abrir Modal al tocar la tarjeta morada
+    const dashboardMinisterio = document.getElementById('dashboard-ministerio');
+    const modalMeta = document.getElementById('modal-meta-ministerio');
+    const btnCancelarMeta = document.getElementById('btn-cancelar-meta');
+    
+    if (dashboardMinisterio && modalMeta) {
+        dashboardMinisterio.addEventListener('click', () => {
+            modalMeta.style.display = 'flex';
+        });
+    }
+
+    if (btnCancelarMeta && modalMeta) {
+        btnCancelarMeta.addEventListener('click', () => {
+            modalMeta.style.display = 'none';
+        });
+    }
+
+    // 2. Aquí conectarás tu botón "btn-guardar-meta" con la función 
+    // de Firebase que actualizaba la meta desde el perfil.
+    const btnGuardarMeta = document.getElementById('btn-guardar-meta');
+    if (btnGuardarMeta) {
+        btnGuardarMeta.addEventListener('click', () => {
+            const nuevaMeta = document.getElementById('input-nueva-meta').value;
+            // LLAMAR AQUÍ A TU FUNCIÓN DE GUARDADO (Ej: actualizarMetaFirebase(nuevaMeta))
+            // modalMeta.style.display = 'none';
+        });
+    }
+});

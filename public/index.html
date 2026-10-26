@@ -70,17 +70,34 @@
 
                 <div id="visitas-view" class="view-section" style="display: none; padding: 0; overflow-y: auto;">
     
-    <!-- PESTAÑAS SUPERIORES DE MINISTERIO -->
+    <!-- PESTAÑAS INVERTIDAS -->
     <div class="top-tabs-container">
-        <button class="top-tab top-tab-ministerio active" data-target="sub-ministerio-view">Mi Ministerio</button>
-        <button class="top-tab top-tab-ministerio" data-target="sub-visitas-view">Visitas</button>
+        <button class="top-tab top-tab-ministerio active" data-target="sub-visitas-view">Visitas</button>
+        <button class="top-tab top-tab-ministerio" data-target="sub-ministerio-view">Horas</button>
     </div>
 
-    <!-- CONTENEDORES DE LAS SUB-VISTAS -->
+    <!-- CONTENEDORES -->
     <div style="padding: 16px; padding-bottom: 90px;">
         
-        <!-- Pestaña 1: Mi Ministerio (Resumen de horas) -->
-        <div id="sub-ministerio-view" class="ministerio-sub-view" style="display: block;">
+        <!-- Pestaña 1: Visitas (AHORA ES LA PRINCIPAL Y ACTIVA) -->
+        <div id="sub-visitas-view" class="ministerio-sub-view" style="display: block;">
+            <div class="visitas-filtros">
+                <button class="filtro-chip active" data-filtro="Todos">Todos</button>
+                <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
+                <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
+                <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
+                <button class="filtro-chip" data-filtro="No visitar">No visitar</button>
+            </div>
+
+            <div id="lista-visitas-container">
+                <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>
+            </div>
+        </div>
+
+        <!-- Pestaña 2: Mi Ministerio (Horas e Historial) -->
+        <div id="sub-ministerio-view" class="ministerio-sub-view" style="display: none;">
+            
+            <!-- Tarjeta de Meta -->
             <div id="dashboard-ministerio" style="background: linear-gradient(135deg, #4b2c91, #6200EE); border-radius: 16px; padding: 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; background: conic-gradient(#CBA4FF var(--progreso, 0%), rgba(255,255,255,0.2) 0); display: flex; align-items: center; justify-content: center;">
@@ -91,25 +108,36 @@
                     <div>
                         <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 13px;">Mi Ministerio (Este mes)</p>
                         <h3 id="horas-totales-mes" style="margin: 2px 0 0 0; color: white; font-size: 22px;">00:00 hs</h3>
-                        <p id="texto-meta-actual" style="margin: 2px 0 0 0; color: rgba(255,255,255,0.6); font-size: 12px;">Sin meta fija</p>
+                        <p id="texto-meta-actual" style="margin: 2px 0 0 0; color: rgba(255,255,255,0.6); font-size: 12px;">Toca para fijar meta</p>
                     </div>
                 </div>
             </div>
             
-            <p style="color: var(--text-muted); font-size: 14px; text-align: center; margin-top: 20px;">
-                Toca el recuadro superior para ver o editar tu historial de servicio.
-            </p>
-        </div>
-
-        <!-- Pestaña 2: Visitas (Libreta digital) -->
-        <div id="sub-visitas-view" class="ministerio-sub-view" style="display: none;">
-            <div class="visitas-filtros">
-                <button class="filtro-chip active" data-filtro="Todos">Todos</button>
-                <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
-                <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
-                <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
-                <button class="filtro-chip" data-filtro="No visitar">No visitar</button>
+            <h3 style="color: var(--primary-color); margin-top: 0; font-size: 18px;">Historial del mes</h3>
+            <!-- AQUÍ ABAJO SE PINTARÁ EL HISTORIAL -->
+            <div id="historial-lista-inline" style="display: flex; flex-direction: column; gap: 10px;">
+                <p style="color: gray; font-size: 14px; text-align: center;">Cargando registros...</p>
             </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- NUEVO MODAL: Definir Meta -->
+<div id="modal-meta-ministerio" class="modal-overlay" style="display: none; z-index: 5000;">
+    <div style="background: var(--surface-color, #ffffff); width: 90%; max-width: 320px; border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <h3 style="margin-top: 0; color: var(--primary-color);">Fijar Meta Mensual</h3>
+        <p style="color: var(--text-muted, gray); font-size: 14px; margin-bottom: 20px;">Establece o cambia tu meta de horas para este mes.</p>
+        
+        <input type="number" id="input-nueva-meta" placeholder="Ej: 15, 30, 50" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #ccc); font-size: 16px; box-sizing: border-box; background: var(--bg-color); color: var(--text-color);">
+        
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button id="btn-cancelar-meta" style="background: #E0E0E0; color: black; flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">Cancelar</button>
+            <button id="btn-guardar-meta" style="background: var(--primary-color, #6200EE); color: white; flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">Guardar</button>
+        </div>
+    </div>
+</div>
+
 
             <div id="lista-visitas-container">
                 <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>

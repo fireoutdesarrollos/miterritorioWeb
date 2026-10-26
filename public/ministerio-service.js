@@ -245,7 +245,7 @@ export function escucharHorasMensuales() {
         where("fecha", ">=", inicioMes)
     );
 
-    onSnapshot(q, (snapshot) => {
+        onSnapshot(q, (snapshot) => {
         totalMilisegundosMes = 0;
         registrosMes = [];
         
@@ -260,30 +260,16 @@ export function escucharHorasMensuales() {
         
         actualizarDashboard();
         
+        // 🔥 AHORA SE PINTA SIEMPRE PORQUE ESTÁ EN LA PESTAÑA, NO EN UN MODAL 🔥
+        renderizarHistorialHoras();
+    });
+
         // Si el modal está abierto, lo actualiza en vivo
         if (document.getElementById('modal-historial-servicio').style.display === 'flex') {
             renderizarHistorialHoras();
         }
     });
-
-    // 🔥 EVENTO CLIC EN EL TABLERO 🔥
-    const btnDashboard = document.getElementById('dashboard-ministerio');
-    const modalHistorial = document.getElementById('modal-historial-servicio');
-    const btnCerrarHistorial = document.getElementById('btn-cerrar-historial');
-
-    if (btnDashboard) {
-        btnDashboard.onclick = () => {
-            renderizarHistorialHoras();
-            modalHistorial.style.display = 'flex';
-            history.pushState({ modal: 'historial_horas' }, null, null); // Para el botón atrás de Android
-        };
-    }
-
-    if (btnCerrarHistorial) {
-        btnCerrarHistorial.onclick = () => {
-            modalHistorial.style.display = 'none';
-        };
-    }
+   
 }
 
 // Dibuja la lista de días adentro del historial
@@ -371,16 +357,19 @@ if (document.getElementById('btn-guardar-edit-horas')) {
     };
 }
 
-// Dibuja la lista de días adentro del historial
+// Dibuja la lista de días adentro del historial (NUEVO DIV)
 function renderizarHistorialHoras() {
-    const container = document.getElementById('lista-registros-horas');
+    // 🔥 CAMBIO: Ahora busca el nuevo div "historial-lista-inline" en vez de "lista-registros-horas"
+    const container = document.getElementById('historial-lista-inline');
     if (!container) return;
     
     container.innerHTML = '';
-    document.getElementById('historial-total-hs').innerText = formatearAHorasMinutos(totalMilisegundosMes) + ' hs';
+    
+    // NOTA: Como la tarjeta morada principal ya muestra las horas totales, 
+    // podemos quitar la línea de "historial-total-hs" que tenías en el modal viejo.
 
     if (registrosMes.length === 0) {
-        container.innerHTML = '<p style="color: gray; text-align: center; margin-top: 30px;">No hay registros este mes.</p>';
+       container.innerHTML = '<p style="color: gray; text-align: center; margin-top: 30px;">No hay registros este mes.</p>';
         return;
     }
 
