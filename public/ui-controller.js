@@ -334,3 +334,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // 1. Lógica de clics para pestañas de Ministerio
+    const tabsMinisterio = document.querySelectorAll('.top-tab-ministerio');
+    const subViewsMinisterio = document.querySelectorAll('.ministerio-sub-view');
+
+    tabsMinisterio.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabsMinisterio.forEach(t => t.classList.remove('active'));
+            subViewsMinisterio.forEach(v => v.style.display = 'none');
+
+            tab.classList.add('active');
+            const targetId = tab.getAttribute('data-target');
+            document.getElementById(targetId).style.display = 'block';
+        });
+    });
+
+    // 2. Lógica de deslizamiento (Swipe) para Ministerio
+    const vistaVisitas = document.getElementById('visitas-view');
+    if (!vistaVisitas) return;
+
+    let toqueInicioMinX = 0;
+    let toqueInicioMinY = 0;
+
+    vistaVisitas.addEventListener('touchstart', (e) => {
+        toqueInicioMinX = e.changedTouches[0].screenX;
+        toqueInicioMinY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    vistaVisitas.addEventListener('touchend', (e) => {
+        // Evitar conflictos con elementos deslizables horizontales internos (si los hubiera)
+        if (e.target.closest('.visitas-filtros')) return;
+
+        const toqueFinMinX = e.changedTouches[0].screenX;
+        const toqueFinMinY = e.changedTouches[0].screenY;
+
+        const difX = toqueInicioMinX - toqueFinMinX;
+        const difY = toqueInicioMinY - toqueFinMinY;
+
+        if (Math.abs(difY) > Math.abs(difX)) return; // Fue un scroll vertical
+        if (Math.abs(difX) < 50) return; // Movimiento muy corto
+
+        const pestañas = Array.from(document.querySelectorAll('.top-tab-ministerio'));
+        const indiceActivo = pestañas.findIndex(tab => tab.classList.contains('active'));
+        
+        if (indiceActivo === -1) return;
+
+        if (difX > 0 && indiceActivo < pestañas.length - 1) {
+            pestañas[indiceActivo + 1].click(); // Swipe Izquierda (Siguiente)
+        } else if (difX < 0 && indiceActivo > 0) {
+            pestañas[indiceActivo - 1].click(); // Swipe Derecha (Anterior)
+        }
+    });
+});

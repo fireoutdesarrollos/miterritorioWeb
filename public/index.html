@@ -68,34 +68,56 @@
                     </div>
                 </div>
 
-                <div id="visitas-view" class="view-section" style="display: none; padding: 20px; overflow-y: auto;">
-                    <div id="dashboard-ministerio" style="background: linear-gradient(135deg, #4b2c91, #6200EE); border-radius: 16px; padding: 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; background: conic-gradient(#CBA4FF var(--progreso, 0%), rgba(255,255,255,0.2) 0); display: flex; align-items: center; justify-content: center;">
-                                <div style="background: #551db0; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                    <span id="porcentaje-meta" style="color: white; font-weight: bold; font-size: 13px;">0%</span>
-                                </div>
-                            </div>
-                            <div>
-                                <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 13px;">Mi Ministerio (Este mes)</p>
-                                <h3 id="horas-totales-mes" style="margin: 2px 0 0 0; color: white; font-size: 22px;">00:00 hs</h3>
-                                <p id="texto-meta-actual" style="margin: 2px 0 0 0; color: rgba(255,255,255,0.6); font-size: 12px;">Sin meta fija</p>
-                            </div>
+                <div id="visitas-view" class="view-section" style="display: none; padding: 0; overflow-y: auto;">
+    
+    <!-- PESTAÑAS SUPERIORES DE MINISTERIO -->
+    <div class="top-tabs-container">
+        <button class="top-tab top-tab-ministerio active" data-target="sub-ministerio-view">Mi Ministerio</button>
+        <button class="top-tab top-tab-ministerio" data-target="sub-visitas-view">Visitas</button>
+    </div>
+
+    <!-- CONTENEDORES DE LAS SUB-VISTAS -->
+    <div style="padding: 16px; padding-bottom: 90px;">
+        
+        <!-- Pestaña 1: Mi Ministerio (Resumen de horas) -->
+        <div id="sub-ministerio-view" class="ministerio-sub-view" style="display: block;">
+            <div id="dashboard-ministerio" style="background: linear-gradient(135deg, #4b2c91, #6200EE); border-radius: 16px; padding: 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; background: conic-gradient(#CBA4FF var(--progreso, 0%), rgba(255,255,255,0.2) 0); display: flex; align-items: center; justify-content: center;">
+                        <div style="background: #551db0; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <span id="porcentaje-meta" style="color: white; font-weight: bold; font-size: 13px;">0%</span>
                         </div>
                     </div>
-                    
-                    <div class="visitas-filtros">
-                        <button class="filtro-chip active" data-filtro="Todos">Todos</button>
-                        <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
-                        <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
-                        <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
-                        <button class="filtro-chip" data-filtro="No visitar">No visitar</button>
-                    </div>
-
-                    <div id="lista-visitas-container">
-                        <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>
+                    <div>
+                        <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 13px;">Mi Ministerio (Este mes)</p>
+                        <h3 id="horas-totales-mes" style="margin: 2px 0 0 0; color: white; font-size: 22px;">00:00 hs</h3>
+                        <p id="texto-meta-actual" style="margin: 2px 0 0 0; color: rgba(255,255,255,0.6); font-size: 12px;">Sin meta fija</p>
                     </div>
                 </div>
+            </div>
+            
+            <p style="color: var(--text-muted); font-size: 14px; text-align: center; margin-top: 20px;">
+                Toca el recuadro superior para ver o editar tu historial de servicio.
+            </p>
+        </div>
+
+        <!-- Pestaña 2: Visitas (Libreta digital) -->
+        <div id="sub-visitas-view" class="ministerio-sub-view" style="display: none;">
+            <div class="visitas-filtros">
+                <button class="filtro-chip active" data-filtro="Todos">Todos</button>
+                <button class="filtro-chip" data-filtro="Revisita">Revisitas</button>
+                <button class="filtro-chip" data-filtro="Estudio">Estudios</button>
+                <button class="filtro-chip" data-filtro="Ausente">Ausentes</button>
+                <button class="filtro-chip" data-filtro="No visitar">No visitar</button>
+            </div>
+
+            <div id="lista-visitas-container">
+                <p style="color: gray; text-align: center; margin-top: 40px;">Cargando tu libreta digital...</p>
+            </div>
+        </div>
+        
+    </div>
+</div>
 
                 <!-- 🔥 NUEVO: Vista del Programa Público ("Cinta transportadora") 🔥 -->
                 <div id="programa-view" class="view-section" style="display: none; padding: 16px; overflow-y: auto;">
