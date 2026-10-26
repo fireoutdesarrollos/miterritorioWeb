@@ -285,3 +285,52 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+document.addEventListener('DOMContentLoaded', () => {
+    // (Aquí asumo que ya tienes tu código anterior que hace el .click() de las top-tabs)
+
+    // 🔥 NUEVO: LÓGICA DE DESLIZAMIENTO (SWIPE) PARA LAS PESTAÑAS SUPERIORES 🔥
+    const vistaServicio = document.getElementById('servicio-view');
+    if (!vistaServicio) return;
+
+    let toqueInicialX = 0;
+    let toqueInicialY = 0;
+
+    vistaServicio.addEventListener('touchstart', (e) => {
+        toqueInicialX = e.changedTouches[0].screenX;
+        toqueInicialY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    vistaServicio.addEventListener('touchend', (e) => {
+        // Evitamos interferir si el usuario está intentando deslizar la tabla del planificador
+        if (e.target.closest('table') || e.target.closest('[style*="overflow-x: auto"]')) return;
+
+        const toqueFinalX = e.changedTouches[0].screenX;
+        const toqueFinalY = e.changedTouches[0].screenY;
+
+        const diferenciaX = toqueInicialX - toqueFinalX;
+        const diferenciaY = toqueInicialY - toqueFinalY;
+
+        // Si el movimiento fue más vertical que horizontal (scroll normal), no hacemos nada
+        if (Math.abs(diferenciaY) > Math.abs(diferenciaX)) return;
+
+        // Si el deslizamiento fue muy corto (menos de 50px), lo ignoramos
+        if (Math.abs(diferenciaX) < 50) return;
+
+        const pestañas = Array.from(document.querySelectorAll('.top-tab'));
+        const indiceActual = pestañas.findIndex(tab => tab.classList.contains('active'));
+        
+        if (indiceActual === -1) return;
+
+        if (diferenciaX > 0) {
+            // Deslizó hacia la izquierda ⬅️ (Ir a la pestaña Siguiente)
+            if (indiceActual < pestañas.length - 1) {
+                pestañas[indiceActual + 1].click();
+            }
+        } else {
+            // Deslizó hacia la derecha ➡️ (Ir a la pestaña Anterior)
+            if (indiceActual > 0) {
+                pestañas[indiceActual - 1].click();
+            }
+        }
+    });
+});
