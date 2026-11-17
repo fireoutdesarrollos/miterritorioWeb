@@ -16,7 +16,6 @@ iniciarAutenticacion();
 inicializarMinisterio(); 
 inicializarModalPuntosSalida(); // 🔥 Arrancamos la escucha de los botones del modal
 configurarPanelAdmin(); 
-inicializarProgramaPublico();
 
 if (typeof inicializarGuias === 'function') inicializarGuias();
 

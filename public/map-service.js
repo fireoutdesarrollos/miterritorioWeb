@@ -251,6 +251,10 @@ export async function inicializarMapaYVisitas() {
     cargarListasMinisterio();
     inicializarBandejaSiervo(); 
 
+    // 🔥 SOLUCIÓN: Definir las referencias de Firebase que faltaban
+    const planificadorRef = doc(db, "congregaciones", window.miUsuario.congregacionId, "planificador", "semana_actual");
+    const qPuntos = collection(db, "congregaciones", window.miUsuario.congregacionId, "puntos_salida");
+    
     const gestionRef = collection(db, "congregaciones", window.miUsuario.congregacionId, "gestion_mapas");
     onSnapshot(gestionRef, (snapshot) => {
         mapasOcupados = {};
@@ -368,14 +372,28 @@ export async function inicializarMapaYVisitas() {
         scriptMapa.onload = async () => {
             const mapEl = document.getElementById("map");
             if (!mapEl) return; 
+            const estiloMapaLimpio = [
+                { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+                { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
+                { featureType: "poi.government", stylers: [{ visibility: "off" }] },
+                { featureType: "poi.school", stylers: [{ visibility: "off" }] },
+                { featureType: "poi.sports_complex", stylers: [{ visibility: "off" }] },
+                { featureType: "poi.place_of_worship", stylers: [{ visibility: "off" }] },
+                { featureType: "transit", stylers: [{ visibility: "off" }] },
+                { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+                { featureType: "landscape", stylers: [{ saturation: -35 }, { lightness: 10 }] },
+                { featureType: "poi.park", stylers: [{ saturation: -30 }] }
+            ];
+
             window.mapaGlobal = new google.maps.Map(mapEl, { 
-    disableDefaultUI: true, 
-    zoomControl: false, 
-    mapTypeControl: false, 
-    streetViewControl: false,
-    gestureHandling: 'greedy' // 🔥 Permite mover el mapa con 1 solo dedo
-});
-refrescarEstilosMapa();
+                disableDefaultUI: true, 
+                zoomControl: false, 
+                mapTypeControl: false, 
+                streetViewControl: false,
+                gestureHandling: 'greedy',
+                styles: estiloMapaLimpio
+            });
+            refrescarEstilosMapa();
 
 
             window.mapaGlobal.data.addListener('click', (event) => {
@@ -487,7 +505,7 @@ refrescarEstilosMapa();
                 const marcadoresMacro = [];
                 Object.keys(centrosMacro).forEach(t => {
                     const d = centrosMacro[t];
-                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: `T${t}`, color: 'black', fontWeight: '900', fontSize: '34px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
+                    marcadoresMacro.push(new google.maps.Marker({ position: { lat: d.latSum / d.count, lng: d.lngSum / d.count }, label: { text: `${t}`, color: '#202124', fontWeight: '900', fontSize: '26px', className: 'map-label-macro' }, icon: { url: "", scaledSize: new google.maps.Size(0,0) } }));
                 });
 
                 window.mapaGlobal.addListener('zoom_changed', () => {
@@ -510,6 +528,7 @@ refrescarEstilosMapa();
                     } else {
                         limitesGlobalesMap.forEach(m => m.setMap(null));
                     }
+                    actualizarPinesEnMapa();
                 });
 
                 if (snapshotReal.size > 0) { 
@@ -531,35 +550,115 @@ refrescarEstilosMapa();
         return texto.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
 
+    // Combina fechaMillis + horaStr para tener el milisegundo exacto de la salida
+    function obtenerTimestampSalida(fechaMillis, horaStr) {
+        if (!fechaMillis) return 0;
+        const date = new Date(fechaMillis);
+        if (horaStr && horaStr.includes(":")) {
+            const partes = horaStr.split(":");
+            date.setHours(parseInt(partes[0], 10) || 0, parseInt(partes[1], 10) || 0, 0, 0);
+        }
+        return date.getTime();
+    }
+
+    // Íconos vectoriales idénticos a Android (Anillo amarillo para el próximo, círculo azul para los demás)
+    const iconoProximoSvg = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+            <circle cx="22" cy="22" r="19" fill="#FFD600" fill-opacity="0.45" stroke="#FFC107" stroke-width="3"/>
+            <circle cx="22" cy="22" r="11" fill="#00ACC1" stroke="#FFFFFF" stroke-width="2.5"/>
+        </svg>
+    `)}`;
+
+    const iconoProgramadoSvg = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="12" fill="#0288D1" stroke="#FFFFFF" stroke-width="2.5"/>
+        </svg>
+    `)}`;
+
+    const iconoInactivoSvg = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+            <circle cx="14" cy="14" r="8" fill="#757575" fill-opacity="0.55" stroke="#FFFFFF" stroke-width="2"/>
+        </svg>
+    `)}`;
+
     let todosLosPuntosGuardados = [];
-    let lugaresActivosHoy = new Set();
+    let salidasPlanificadorCrudas = [];
+
+  function generarIconoSalida(esProximo, esSalon, esActivo) {
+        const size = esProximo ? 34 : (esActivo ? 26 : 20);
+        let fill = esProximo ? '#00ACC1' : (esActivo ? '#0288D1' : '#757575');
+        if (esSalon) fill = '#7B1FA2';
+
+        const stroke = esProximo ? '#FFC107' : '#FFFFFF';
+        const strokeW = esProximo ? 3.5 : 2.5;
+        const innerColor = esProximo ? '#FFC107' : '#FFFFFF';
+
+        const innerShape = esSalon
+            ? `<rect x="11" y="11" width="10" height="10" fill="${innerColor}"/>`
+            : `<circle cx="16" cy="16" r="4.8" fill="${innerColor}"/>`;
+
+        const svg = encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${size}" height="${size}">
+                <circle cx="16" cy="16" r="13" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>
+                ${innerShape}
+            </svg>
+        `);
+
+        return {
+            url: `data:image/svg+xml;charset=UTF-8,${svg}`,
+            scaledSize: new google.maps.Size(size, size),
+            anchor: new google.maps.Point(size / 2, size / 2),
+            labelOrigin: new google.maps.Point(size / 2, size + 10)
+        };
+    }
 
     function actualizarPinesEnMapa() {
         pinesPuntosSalida.forEach(pin => pin.setMap(null));
         pinesPuntosSalida = [];
-        if (!window.mapaGlobal) return;
+        if (!window.mapaGlobal || !window.miUsuario) return;
 
-        const esAdmin = window.miUsuario.rol === 'siervo' || window.miUsuario.rol === 'ayudante';
+        const ahora = Date.now();
+        const unaHoraMs = 1 * 60 * 60 * 1000;
+        const zoomActual = window.mapaGlobal.getZoom() || 14;
+
+        const salidasVigentes = salidasPlanificadorCrudas
+            .map(s => ({ ...s, tsExacto: obtenerTimestampSalida(s.fechaMillis, s.horaStr) }))
+            .filter(s => s.tsExacto > 0 && ahora <= (s.tsExacto + unaHoraMs) && s.lugar)
+            .sort((a, b) => a.tsExacto - b.tsExacto);
+
+        const lugaresActivosHoy = new Set(salidasVigentes.map(s => normalizarLugar(s.lugar)));
+        const lugarProximoNorm = salidasVigentes.length > 0 ? normalizarLugar(salidasVigentes[0].lugar) : "";
+
+        const rolesUsuario = Array.isArray(window.miUsuario.rol)
+            ? window.miUsuario.rol.map(r => String(r).toLowerCase())
+            : [String(window.miUsuario.rol || '').toLowerCase()];
+        const esAdmin = rolesUsuario.includes('siervo') || rolesUsuario.includes('ayudante');
 
         todosLosPuntosGuardados.forEach(data => {
-            // 🔥 AHORA COMPARA LOS TEXTOS NORMALIZADOS
-            const estaActivo = lugaresActivosHoy.has(normalizarLugar(data.nombre));
+            const nombreNorm = normalizarLugar(data.nombre);
+            const esElProximo = nombreNorm !== "" && nombreNorm === lugarProximoNorm;
+            const estaActivo = lugaresActivosHoy.has(nombreNorm);
+            const esSalon = nombreNorm.includes('salon');
 
             if (!estaActivo && !esAdmin) return;
+
+            // Igual que en Android: de lejos solo muestra texto del próximo y del Salón; de cerca muestra todos
+            const mostrarTexto = esElProximo || esSalon || zoomActual >= 15.5;
+            const colorTexto = esSalon ? '#6A1B9A' : (estaActivo ? '#202124' : 'gray');
 
             const marker = new google.maps.Marker({
                 position: { lat: data.lat, lng: data.lng },
                 map: window.mapaGlobal,
-                label: {
-                    text: `${data.emoji || '📍'} ${data.nombre}`,
-                    color: estaActivo ? '#009688' : 'gray',
+                label: mostrarTexto ? {
+                    text: data.nombre,
+                    color: colorTexto,
                     fontWeight: '900',
-                    fontSize: '14px',
-                    className: 'map-label-macro'
-                },
-                icon: { url: "", scaledSize: new google.maps.Size(0,0) },
-                zIndex: estaActivo ? 2600 : 2400,
-                opacity: estaActivo ? 1.0 : 0.4 
+                    fontSize: '13px',
+                    className: 'map-label-salida'
+                } : null,
+                icon: generarIconoSalida(esElProximo, esSalon, estaActivo),
+                zIndex: esElProximo ? 2800 : (estaActivo ? 2600 : 2400),
+                opacity: estaActivo ? 1.0 : 0.55
             });
 
             marker.addListener('click', () => {
@@ -570,57 +669,27 @@ refrescarEstilosMapa();
                             if(window.mostrarToastM3) window.mostrarToastM3("Punto eliminado", "success");
                         });
                     }
+                } else if (estaActivo) {
+                    abrirNavegadorGPS(data.lat, data.lng);
                 }
             });
             pinesPuntosSalida.push(marker);
         });
     }
 
+    // 1. Escuchamos el programa en vivo (semana_actual)
     onSnapshot(planificadorRef, (docSnap) => {
-        lugaresActivosHoy.clear();
-        if (docSnap.exists()) {
-            const salidas = docSnap.data().salidas || [];
-            const ahora = Date.now();
-            salidas.forEach(salida => {
-                const date = new Date(salida.fechaMillis);
-                if (salida.horaStr && salida.horaStr.includes(":")) {
-                    const partes = salida.horaStr.split(":");
-                    date.setHours(parseInt(partes[0], 10), parseInt(partes[1], 10), 0, 0);
-                }
-                const limite = date.getTime() + (2 * 60 * 60 * 1000); 
-                if (ahora <= limite && salida.lugar) {
-                    lugaresActivosHoy.add(normalizarLugar(salida.lugar)); // 🔥 GUARDA NORMALIZADO
-                }
-            });
-        }
-        actualizarPinesEnMapa();
-    });
-    
-
-    // 1. Escuchamos el programa en vivo y anotamos qué lugares siguen vigentes
-    onSnapshot(planificadorRef, (docSnap) => {
-        lugaresActivosHoy.clear();
-        if (docSnap.exists()) {
-            const salidas = docSnap.data().salidas || [];
-            const ahora = Date.now();
-            
-            salidas.forEach(salida => {
-                const date = new Date(salida.fechaMillis);
-                if (salida.horaStr && salida.horaStr.includes(":")) {
-                    const partes = salida.horaStr.split(":");
-                    date.setHours(parseInt(partes[0], 10), parseInt(partes[1], 10), 0, 0);
-                }
-                const limite = date.getTime() + (2 * 60 * 60 * 1000); // 2 horas de vida
-                
-                if (ahora <= limite && salida.lugar) {
-                    lugaresActivosHoy.add(salida.lugar); // ¡Este lugar sobrevive!
-                }
-            });
-        }
+        salidasPlanificadorCrudas = docSnap.exists() ? (docSnap.data().salidas || []) : [];
         actualizarPinesEnMapa();
     });
 
-    // 2. Escuchamos el catálogo de puntos guardados
+    // 2. Reloj automático cada 30 segundos: hace caer el pin 1 hora después y pasa el anillo amarillo al siguiente
+    if (window.relojPinesSalida) clearInterval(window.relojPinesSalida);
+    window.relojPinesSalida = setInterval(() => {
+        actualizarPinesEnMapa();
+    }, 30000);
+
+    // 3. Escuchamos el catálogo de puntos guardados
     onSnapshot(qPuntos, (snapshot) => {
         todosLosPuntosGuardados = [];
 

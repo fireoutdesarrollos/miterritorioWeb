@@ -6,109 +6,98 @@
 }
 
 /* =========================================
-   VARIABLES Y TEMAS (Claro / Oscuro)
+   RESETEO GLOBAL Y TIPOGRAFÍA
    ========================================= */
-/* TEMA CLARO (Por defecto) */
-:root, [data-theme="light"] {
-    --primary-color: #a875ff; 
-    --primary-dark: #2b1a3f;  
-    --accent-color: #5c3b6e;  
-    --bg-color: #F3F4F6;
-    --surface-color: #FFFFFF; 
-    --border-color: rgba(0, 0, 0, 0.1); 
-    --text-color: #1F2937;
-    --text-muted: gray; 
-    --tab-text-inactive: #a092b1;
-    --tab-text-active: #ffffff;
-    --border-radius: 12px;
-    --input-border: gray;
-    --chip-bg: #E0E0E0;
-    --chip-text: #424242;
-    --btn-secondary-bg: #E0E0E0;
-    --btn-secondary-text: black;
-    --chat-bg: #DCF8C6;
-    --chat-text: #303030;
-    --chat-meta: #666666;
-    --modal-overlay: rgba(0,0,0,0.6);
-    --badge-libre-bg: #E8F5E9;
-    --badge-libre-text: #2E7D32;
-    --badge-asignado-bg: #FFF3E0;
-    --badge-asignado-text: #E65100;
-    --badge-vencido-bg: #FFEBEE;
-    --badge-vencido-text: #C62828;
-    --error-bg: #FFEBEE;
-    --error-text: #C62828;
-}
-
-/* TEMA OSCURO (Forzado por data-theme) */
-[data-theme="dark"] {
-    --primary-color: #8a57e3; 
-    --primary-dark: #170d24;
-    --accent-color: #7b5291;
-    --bg-color: #121212;
-    --surface-color: #2B2A33; /* El color oscuro que te gustaba */
-    --border-color: #3F3E47; /* Borde sutil oscuro */
-    --text-color: #E5E7EB;
-    --text-muted: #A0A0A0; 
-    --input-border: #555;
-    --chip-bg: #2C2C2C;
-    --chip-text: #E0E0E0;
-    --btn-secondary-bg: #333;
-    --btn-secondary-text: white;
-    --chat-bg: #054735;
-    --chat-text: #E2E8F0;
-    --chat-meta: #94A3B8;
-    --modal-overlay: rgba(0,0,0,0.8); /* Fondo más oscuro para modales en este tema */
-    --badge-libre-bg: rgba(46, 125, 50, 0.2);
-    --badge-libre-text: #4CAF50;
-    --badge-asignado-bg: rgba(230, 81, 0, 0.2);
-    --badge-asignado-text: #FF9800;
-    --badge-vencido-bg: rgba(198, 40, 40, 0.2);
-    --badge-vencido-text: #EF5350;
-    --error-bg: rgba(198, 40, 40, 0.2);
-    --error-text: #EF5350;
-}
-
-/* TEMA AUTOMÁTICO (Del sistema) */
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        /* Copiamos exactamente las mismas variables del tema oscuro */
-        --primary-color: #8a57e3; 
-        --primary-dark: #170d24;
-        --accent-color: #7b5291;
-        --bg-color: #121212;
-        --surface-color: #2B2A33; 
-        --border-color: #3F3E47; 
-        --text-color: #E5E7EB;
-        --text-muted: #A0A0A0; 
-        --input-border: #555;
-        --chip-bg: #2C2C2C;
-        --chip-text: #E0E0E0;
-        --btn-secondary-bg: #333;
-        --btn-secondary-text: white;
-        --chat-bg: #054735;
-        --chat-text: #E2E8F0;
-        --chat-meta: #94A3B8;
-        --modal-overlay: rgba(0,0,0,0.8);
-        --badge-libre-bg: rgba(46, 125, 50, 0.2);
-        --badge-libre-text: #4CAF50;
-        --badge-asignado-bg: rgba(230, 81, 0, 0.2);
-        --badge-asignado-text: #FF9800;
-        --badge-vencido-bg: rgba(198, 40, 40, 0.2);
-        --badge-vencido-text: #EF5350;
-        --error-bg: rgba(198, 40, 40, 0.2);
-        --error-text: #EF5350;
-    }
-}
-
 body, html {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Roboto', system-ui, -apple-system, sans-serif;
     background-color: var(--bg-color);
     color: var(--text-color);
     margin: 0;
     padding: 0;
     height: 100%;
     overflow: hidden; 
+    /* padding-bottom ELIMINADO para evitar conflicto con el 100vh del HTML */
+}
+
+/* TEMA CLARO (Preestablecido) */
+:root, [data-theme="light"] {
+    --primary-color: #65558F;       /* Púrpura medio */
+    --primary-dark: #E8DEF8;        /* Tono lila pastel para la píldora activa */
+    --bg-color: #FFFFFF;            /* Fondo blanco puro */
+    --surface-color: #F7F2FA;       /* Variación suave para paneles */
+    --border-color: #E6E0E9;
+    --text-color: #1D1B20;          /* Texto oscuro para buen contraste */
+    --text-muted: #49454F;          /* Texto secundario */
+    --bottom-nav-bg: #F3EDF7;       /* Fondo de la barra de navegación M3 */
+    --bottom-nav-inactive: #49454F;
+    --fab-bg: #FDB7CA;              /* Fondo del botón de libreta en claro (Rosa) */
+    --fab-color: #31111D;           /* Color del icono en el botón */
+}
+
+/* TEMA OSCURO */
+[data-theme="dark"] {
+    --primary-color: #D0BCFF;       /* Púrpura suave */
+    --primary-dark: #381E72;        /* Tono oscuro para el ovalo contenedor activo */
+    --bg-color: #1D1B20;            /* Fondo de la app oscuro profundo */
+    --surface-color: #211F26;       /* Variación de fondo para componentes */
+    --border-color: #36343B;
+    --text-color: #E6E0E9;          /* Texto casi blanco */
+    --text-muted: #CAC4D0;          /* Texto secundario */
+    --bottom-nav-bg: #1D1B20;       /* Mismo fondo oscuro de la app */
+    --bottom-nav-inactive: #CAC4D0;
+    --fab-bg: #4F3740;              /* Fondo de libreta en oscuro (Marrón) */
+    --fab-color: #FFD8E4;           /* Tono claro para icono en modo oscuro */
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --primary-color: #D0BCFF;
+        --primary-dark: #381E72;
+        --bg-color: #1D1B20;
+        --surface-color: #211F26;
+        --border-color: #36343B;
+        --text-color: #E6E0E9;
+        --text-muted: #CAC4D0;
+        --bottom-nav-bg: #1D1B20;
+        --bottom-nav-inactive: #CAC4D0;
+        --fab-bg: #4F3740;
+        --fab-color: #FFD8E4;
+    }
+}
+/* =========================================
+   VARIABLES Y TEMAS (Actualización Material 3)
+   ========================================= */
+
+/* 1. Cuando forzamos el tema oscuro manualmente */
+[data-theme="dark"] {
+    --primary-color: #D0BCFF; /* Púrpura más claro típico de Android M3 */
+    --primary-dark: #381E72;
+    --bg-color: #141218; /* Fondo casi negro */
+    --surface-color: #2B2930; /* Gris oscuro para tarjetas */
+    --border-color: rgba(255, 255, 255, 0.1);
+    --text-color: #E6E0E9;
+    --text-muted: #CAC4D0;
+    --chip-bg: #4A4458;
+    --chip-text: #E8DEF8;
+    --bottom-nav-bg: #1D1B20; /* Color de la barra inferior Android */
+    --bottom-nav-inactive: #CAC4D0;
+}
+
+/* 2. Cuando el sistema del teléfono está en modo oscuro (y no forzamos el modo claro) */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --primary-color: #D0BCFF;
+        --primary-dark: #381E72;
+        --bg-color: #141218;
+        --surface-color: #2B2930;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --text-color: #E6E0E9;
+        --text-muted: #CAC4D0;
+        --chip-bg: #4A4458;
+        --chip-text: #E8DEF8;
+        --bottom-nav-bg: #1D1B20;
+        --bottom-nav-inactive: #CAC4D0;
+    }
 }
 
 /* =========================================
@@ -137,26 +126,95 @@ button:active { opacity: 0.8; }
     background-color: var(--bg-color); display: flex; flex-direction: column;
     align-items: center; justify-content: center; z-index: 5000;
 }
-#login-section img { width: 120px; border-radius: 25px; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-#btn-login { width: 80%; max-width: 300px; }
+
+#login-section img { 
+    width: 120px; 
+    border-radius: 25px; 
+    margin-bottom: 25px; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+}
+
+#btn-login { 
+    width: 100%; 
+    max-width: 320px; 
+    background-color: var(--primary-color);
+    color: var(--bg-color); /* Asegura contraste perfecto */
+    border: none;
+    padding: 14px 24px;
+    border-radius: 100px; /* Borde de píldora nativo M3 */
+    font-family: 'Roboto', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.15px;
+    -webkit-font-smoothing: antialiased; /* Letras ultra nítidas */
+    -moz-osx-font-smoothing: grayscale;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+/* Efecto visual al presionarlo */
+#btn-login:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
 
 /* =========================================
-   PANTALLA PRINCIPAL Y PESTAÑAS
+   PANTALLA PRINCIPAL (Top App Bar M3)
    ========================================= */
 .app-bar {
-    background-color: var(--primary-color); color: white; display: flex;
-    justify-content: space-between; align-items: center; padding: 15px 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    height: 64px;
+    box-sizing: border-box;
+    /* Se elimina el border-bottom para que se funda con el mapa, como en Android */
+    border-bottom: none;
+    z-index: 10;
 }
-.app-title { margin: 0; font-size: 20px; font-weight: 500; }
-.app-tabs { background-color: var(--primary-dark); display: flex; justify-content: space-around; }
-.tab {
-    background: none; border: none; color: var(--tab-text-inactive);
-    padding: 15px 0; font-size: 14px; font-weight: bold; flex: 1; margin: 0;
-    border-radius: 0; cursor: pointer; border-bottom: 3px solid transparent;
+
+.nav-title-btn {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Espaciado ajustado */
+    padding: 0;
+    cursor: pointer;
+    color: var(--text-color);
 }
-.tab.active { color: var(--tab-text-active); border-bottom: 3px solid var(--primary-color); }
-.view-section { flex: 1; height: 100%; width: 100%; }
+
+.nav-title-btn .play-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.nav-title-btn span {
+    font-family: 'Roboto', sans-serif;
+    font-size: 18px; /* Tamaño ajustado para coincidir con la captura nativa */
+    font-weight: 500;
+    letter-spacing: 0.15px;
+}
+
+.app-icons {
+    display: flex;
+    align-items: center;
+}
+
+.app-icons svg {
+    width: 24px;
+    height: 24px;
+    fill: var(--text-color);
+    cursor: pointer;
+}
 
 /* =========================================
    MAPA Y BOTÓN FLOTANTE
@@ -168,14 +226,36 @@ button:active { opacity: 0.8; }
     -webkit-tap-highlight-color: transparent; outline: none;
 }
 .fab-button {
-    position: absolute; bottom: 30px; left: 20px; padding: 0;
-    background-color: var(--accent-color); color: white;
-    border: none; border-radius: 15px; width: 60px; height: 60px;
-    font-size: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    cursor: pointer; z-index: 100;
+    position: absolute;
+    bottom: 104px; /* Un poco más arriba para no chocar con la barra */
+    left: 20px;
+    background-color: var(--fab-bg);
+    color: var(--fab-color);
+    border: none;
+    border-radius: 16px; /* Cuadrado con bordes muy redondeados (M3) */
+    width: 56px;
+    height: 56px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 900;
 }
-.map-label-macro { text-shadow: 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white, 0px 0px 6px white; }
-.map-label-micro { text-shadow: 0px 0px 4px white, 0px 0px 4px white, 0px 0px 4px white; }
+.fab-button svg { width: 24px; height: 24px; fill: currentColor; }
+
+.map-label-macro, .map-label-micro, .map-label-salida {
+    -webkit-text-stroke: 3px white;
+    paint-order: stroke fill;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+
+.cartel-frontera { background-color: #1565C0; color: white !important; padding: 3px 8px; border-radius: 8px; font-weight: bold; font-size: 12px; text-shadow: none; }
+
+/* Subir panel de registro sobre la bottom nav */
+#panel-registro { bottom: 90px !important; z-index: 1000; }
+.gmnoprint, .gm-control-active { margin-bottom: 75px !important; }
 
 /* =========================================
    MIS VISITAS (Tarjetas y Filtros)
@@ -185,39 +265,72 @@ button:active { opacity: 0.8; }
     margin-bottom: 16px; border-bottom: 1px solid var(--border-color);
 }
 .visitas-filtros::-webkit-scrollbar { display: none; }
+/* =========================================
+   FILTROS (Chips)
+   ========================================= */
 .filtro-chip {
-    background-color: var(--chip-bg); color: var(--chip-text); border: 1px solid transparent;
-    padding: 8px 18px; border-radius: 24px; font-size: 14px; font-weight: 600;
-    white-space: nowrap; cursor: pointer; transition: all 0.2s ease; width: auto;
+    background-color: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    border-radius: 32px; /* Efecto píldora total */
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
-.filtro-chip.active { background-color: var(--primary-color); color: white; }
-.visita-card {
-    background-color: var(--surface-color); border-radius: 16px; padding: 16px 20px;
-    margin-bottom: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.04);
-    display: flex; align-items: center; cursor: pointer; border: 1px solid var(--border-color);
+
+.filtro-chip.active {
+    background-color: var(--primary-dark);
+    color: var(--primary-color);
+    border: none;
 }
-.visita-card:active { opacity: 0.7; }
-.visita-color { width: 16px; height: 16px; border-radius: 50%; margin-right: 18px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.visita-info h3 { margin: 0 0 6px 0; font-size: 17px; color: var(--text-color); font-weight: 700; }
-.visita-info p { margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
 
 /* =========================================
-   FICHA DE VISITA (Modal Formulario - Gemelo Android)
+   MIS VISITAS (Tarjetas)
    ========================================= */
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--bg-color); z-index: 2000; flex-direction: column; }
+.visita-card {
+    background-color: var(--surface-color);
+    border-radius: 24px; /* Esquinas mucho más redondeadas */
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border: none; /* Quitamos el borde para un look más limpio */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2); /* Sombra sutil */
+}
+
+.visita-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 16px;
+    flex-shrink: 0;
+    box-shadow: none; /* Sin sombra en el punto */
+}
+
+.visita-info h3 { margin: 0 0 4px 0; font-size: 16px; font-weight: 500; }
+.visita-info p { margin: 0; font-size: 14px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+
+/* =========================================
+   MODALES GENERALES Y FICHA DE VISITA
+   ========================================= */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--modal-overlay); z-index: 3000; flex-direction: column; display: flex; align-items: center; justify-content: center;}
 .ficha-header { 
-    background-color: var(--surface-color); /* Android usa color de fondo normal arriba */
+    background-color: var(--surface-color); 
     color: var(--text-color); 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
     padding: 16px 20px; 
     box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+    width: 100%;
 }
 #btn-guardar-ficha { color: var(--primary-color); }
 #btn-cerrar-ficha { color: var(--text-color); font-size: 16px !important; font-weight: 500; }
 
-.ficha-body { padding: 20px; overflow-y: auto; flex: 1; }
+.ficha-body { padding: 20px; overflow-y: auto; flex: 1; width: 100%; }
 .form-row { display: flex; gap: 15px; margin-bottom: 15px; width: 100%; }
 .input-group { margin-bottom: 12px; display: flex; flex-direction: column; width: 100%; }
 .input-group label { font-size: 12px; color: var(--text-color); font-weight: normal; margin-bottom: 6px; }
@@ -226,7 +339,7 @@ button:active { opacity: 0.8; }
 .input-group input, .input-group select, .input-group textarea { 
     background-color: transparent; 
     border: 1px solid var(--border-color); 
-    border-radius: 4px; /* Un redondeo más sutil como Android Material 3 */
+    border-radius: 4px; 
     padding: 14px; 
     color: var(--text-color); 
     font-family: inherit; 
@@ -237,96 +350,49 @@ button:active { opacity: 0.8; }
     border-color: var(--primary-color); 
     outline: none; 
     border-width: 2px; 
-    padding: 13px; /* Compensa el px extra de borde */
+    padding: 13px; 
 }
 
 .btn-icon { background-color: var(--primary-color); color: white; border: none; display: flex; align-items: center; justify-content: center; margin: 0; }
+.btn-agendar { background-color: var(--btn-secondary-bg); color: var(--btn-secondary-text); border-radius: 12px; padding: 14px; font-weight: bold; margin-top: 10px; }
 
-/* Botón de Agendar (Secundario) */
-.btn-agendar { 
-    background-color: var(--btn-secondary-bg); 
-    color: var(--btn-secondary-text); 
-    border-radius: 12px; 
-    padding: 14px; 
-    font-weight: bold; 
-    margin-top: 10px;
-}
 /* =========================================
-   HISTORIAL DE CONVERSACIONES (Estilo Card Android M3)
+   HISTORIAL DE CONVERSACIONES 
    ========================================= */
 .chat-bubble { 
-    background-color: var(--surface-color); /* Fondo dinámico igual a Android surface */
+    background-color: var(--surface-color); 
     color: var(--text-color); 
-    border: 1px solid var(--border-color); /* Borde outlineVariant */
+    border: 1px solid var(--border-color); 
     padding: 16px; 
-    border-radius: 16px 16px 16px 0px; /* Redondeo asimétrico idéntico a tu Kotlin */
-    width: 100%; /* fillMaxWidth para que no parezca chat de WhatsApp */
+    border-radius: 16px 16px 16px 0px; 
+    width: 100%; 
     box-shadow: 0 2px 5px rgba(0,0,0,0.02); 
     display: flex; 
     flex-direction: column; 
     box-sizing: border-box; 
 }
+.chat-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; margin-top: 6px; color: var(--text-color); }
+.chat-meta { font-size: 12px; color: var(--text-muted); font-weight: bold; align-self: flex-start; order: -1; }
 
-.chat-text { 
-    font-size: 14px; 
-    line-height: 1.5; 
-    white-space: pre-wrap; 
-    margin-top: 6px; 
-    color: var(--text-color);
-}
-
-.chat-meta { 
-    font-size: 12px; 
-    color: var(--text-muted); /* onSurfaceVariant */
-    font-weight: bold; 
-    align-self: flex-start;
-    order: -1; /* TRUCO MAGISTRAL: Fuerza a la fecha a posicionarse ARRIBA del texto automáticamente */
-}
 /* =========================================
-   RINCÓN DE SERVICIO (ADMIN) - AHORA SÍ ADAPTABLE
+   RINCÓN DE SERVICIO (ADMIN)
    ========================================= */
 .admin-card {
-    background-color: var(--surface-color); 
-    border: 1px solid var(--border-color);
-    border-radius: 20px; 
-    padding: 20px 16px; 
-    display: flex; 
-    align-items: center; 
-    gap: 16px;
-    cursor: pointer; 
-    transition: transform 0.1s ease, box-shadow 0.2s ease;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+    background-color: var(--surface-color); border: 1px solid var(--border-color);
+    border-radius: 20px; padding: 20px 16px; display: flex; align-items: center; gap: 16px;
+    cursor: pointer; transition: transform 0.1s ease, box-shadow 0.2s ease; box-shadow: 0 4px 10px rgba(0,0,0,0.04);
 }
-.admin-card:active { 
-    transform: scale(0.97); 
-    background-color: rgba(0,0,0,0.02);
-}
-.admin-card .admin-icon {
-    background-color: var(--primary-color); 
-    width: 56px; height: 56px; border-radius: 50%; display: flex; 
-    align-items: center; justify-content: center; flex-shrink: 0;
-}
+.admin-card:active { transform: scale(0.97); background-color: rgba(0,0,0,0.02); }
+.admin-card .admin-icon { background-color: var(--primary-color); width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .admin-card-text { display: flex; flex-direction: column; gap: 6px; }
 .admin-card-text h3 { margin: 0; font-size: 17px; color: var(--text-color); font-weight: 700; letter-spacing: 0.3px; }
 .admin-card-text p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.4; }
-
 .btn-volver-admin { background: none; border: none; color: var(--primary-color); font-weight: bold; font-size: 15px; padding: 0; cursor: pointer; margin-bottom: 20px; display: flex; align-items: center; gap: 5px; }
 
-/* Tarjetas de los reportes internos */
-.admin-reporte-card {
-    background-color: var(--surface-color); 
-    border: 1px solid var(--border-color);
-    border-radius: 16px; padding: 16px; margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-}
-
 /* =========================================
-   INVENTARIO DE MAPAS
+   INVENTARIO Y ETIQUETAS
    ========================================= */
-.inventario-item {
-    background: var(--surface-color); border: 1px solid var(--border-color);
-    border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;
-}
+.inventario-item { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
 .inventario-item input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary-color); }
 .inventario-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .inventario-info h4 { margin: 0; color: var(--text-color); font-size: 16px; display: flex; justify-content: space-between; align-items: center;}
@@ -337,7 +403,7 @@ button:active { opacity: 0.8; }
 .badge-vencido { background: var(--badge-vencido-bg); color: var(--badge-vencido-text); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; }
 
 /* =========================================
-   AUTOCOMPLETE INTELIGENTE (Fuzzy Search M3)
+   AUTOCOMPLETE INTELIGENTE 
    ========================================= */
 .autocomplete-container { position: relative; width: 100%; }
 .autocomplete-list { 
@@ -346,134 +412,102 @@ button:active { opacity: 0.8; }
     border-radius: 8px; z-index: 9999; max-height: 200px; overflow-y: auto; 
     box-shadow: 0 4px 15px rgba(0,0,0,0.4); display: none; 
 }
-.autocomplete-item {
-    padding: 14px 16px; cursor: pointer; color: var(--text-color); font-size: 15px;
-    border-bottom: 1px solid rgba(128,128,128,0.1);
-}
+.autocomplete-item { padding: 14px 16px; cursor: pointer; color: var(--text-color); font-size: 15px; border-bottom: 1px solid rgba(128,128,128,0.1); }
 .autocomplete-item:last-child { border-bottom: none; }
 .autocomplete-item:hover, .autocomplete-item:active { background: var(--bg-color); }
 
 /* =========================================
-   PIN DE FRONTERA (Cartel Azul)
+   BARRA DE NAVEGACIÓN INFERIOR (Material 3)
    ========================================= */
-.cartel-frontera {
-    background-color: #1565C0;
-    color: white !important;
-    padding: 3px 8px;
-    border-radius: 8px;
-    font-weight: bold;
-    font-size: 12px;
-    text-shadow: none; /* Quitamos la sombra blanca de los otros pines */
-}
-/* Quita el contorno blanco por defecto que Google le pone a los textos (labels) */
-.map-label-salida {
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.4); /* Le da un efecto flotante al emoji */
-    pointer-events: none; /* Evita parpadeos en el hover */
-}
-/* Espacio inferior para que la barra no tape el contenido de la app */
-body {
-  margin: 0;
-  padding-bottom: calc(65px + env(safe-area-inset-bottom)); 
-}
-
-/* Contenedor de la barra inferior */
 .bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background-color: #ffffff; /* Color de fondo */
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  border-top: 1px solid #e0e0e0;
-  padding-top: 8px;
-  /* El env() evita que la barra de iOS pise la botonera de la PWA */
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
-  z-index: 1000;
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.05); /* Sombra sutil arriba */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: var(--bottom-nav-bg); 
+    border-top: 1px solid var(--border-color);
+    min-height: 72px;
+    height: auto;
+    padding-top: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 1000;
 }
 
-/* Estilos de cada pestaña */
 .nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  color: #757575; /* Color inactivo estilo JW Library (gris) */
-  min-width: 60px;
-  transition: color 0.2s ease;
-  -webkit-tap-highlight-color: transparent; /* Quita el cuadro azul feo en móviles al tocar */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: var(--bottom-nav-inactive);
+    transition: color 0.15s ease-in-out;
+    min-width: 60px;
+    -webkit-tap-highlight-color: transparent;
 }
 
-/* Iconos SVG */
 .nav-item svg {
-  width: 24px;
-  height: 24px;
-  margin-bottom: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 4px 20px; /* Ancho de la píldora */
+    border-radius: 16px; 
+    display: block; 
+    box-sizing: content-box; 
+    fill: currentColor; 
+    transition: background-color 0.15s ease-in-out, fill 0.15s ease-in-out;
 }
 
-/* Texto de la pestaña */
 .nav-item span {
-  font-size: 11px; /* Letra pequeña, clásica de apps nativas */
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-weight: 500;
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 4px;
 }
 
-/* ESTADO ACTIVO (Cuando se selecciona una pestaña) */
+/* Efecto M3 activo */
 .nav-item.active {
-  color: #4a5c9a; /* Un color institucional/sobrio (ajusta al tema de tu app) */
-}
-/* 🔥 AJUSTE PARA QUE EL MAPA NO CHOQUE CON LA BARRA INFERIOR 🔥 */
-
-/* Sube el botón morado de la tablita */
-#btn-fab-registro, 
-.fab-button {
-    bottom: 90px !important;
-    z-index: 900 !important;
+    color: var(--primary-color);
 }
 
-/* Sube el cartel blanco que aparece para elegir "Parcial" o "Completo" */
-#panel-registro {
-    bottom: 90px !important;
+.nav-item.active svg {
+    background-color: var(--primary-dark);
+    fill: var(--primary-color);
 }
 
-/* Opcional: Si tienes los botones de Zoom de Google Maps activados, los sube también */
-.gmnoprint, .gm-control-active {
-    margin-bottom: 75px !important;
+.nav-item.active span {
+    font-weight: 700;
+    color: var(--text-color); 
 }
-/* Pestañas Superiores (Top Tabs) para Admin */
+
+/* =========================================
+   PESTAÑAS SUPERIORES (TOP TABS)
+   ========================================= */
 .top-tabs-container {
     display: flex;
     overflow-x: auto;
     white-space: nowrap;
-    background-color: var(--bg-color, #ffffff);
-    border-bottom: 1px solid #e0e0e0;
+    background-color: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
     position: sticky;
     top: 0;
     z-index: 100;
-    -webkit-overflow-scrolling: touch; /* Suavidad en iOS */
+    -webkit-overflow-scrolling: touch; 
 }
-
-/* Ocultar barra de scroll en la tira de pestañas */
-.top-tabs-container::-webkit-scrollbar {
-    display: none;
-}
-
+.top-tabs-container::-webkit-scrollbar { display: none; }
 .top-tab {
     background: none;
     border: none;
     padding: 14px 16px;
     font-size: 14px;
     font-weight: bold;
-    color: #757575; /* Inactivo */
+    color: var(--text-muted); 
     border-bottom: 2px solid transparent;
     cursor: pointer;
     transition: all 0.2s ease;
+    border-radius: 0;
 }
-
 .top-tab.active {
-    color: var(--primary-color, #6200EE);
-    border-bottom: 2px solid var(--primary-color, #6200EE);
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
 }

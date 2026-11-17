@@ -1,10 +1,10 @@
 {
   "name": "Mi Territorio",
-  "short_name": "Territorios",
+  "short_name": "Mi Territorio",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F3F4F6",
-  "theme_color": "#a875ff",
+  "background_color": "#1D1B20",
+  "theme_color": "#1D1B20",
   "icons": [
     {
       "src": "icon-192.png",

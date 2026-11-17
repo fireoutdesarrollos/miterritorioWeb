@@ -9,8 +9,9 @@ import { inicializarMapaYVisitas } from "./map-service.js";
 import { configurarPanelAdmin } from "./admin-service.js";
 import { aplicarCandadoPrivacidad } from "./ui-controller.js";
 import { escucharHorasMensuales } from "./ministerio-service.js";
+import { inicializarProgramaPublico } from "./programa-service.js";
 
-const WEB_VERSION = "v1.7.9"; 
+const WEB_VERSION = "v1.7.10"; 
 
 aplicarTemaInicial();
 
@@ -240,20 +241,6 @@ async function mostrarPantallaPerfil() {
                     <div style="background-color: var(--bg-color, #2B2A33); color: var(--text-color, #E0E0E0); padding: 8px 16px; border-radius: 16px; font-size: 13px; font-weight: 500; border: 1px solid var(--border-color, rgba(255,255,255,0.05));">
                         ${congregacionTexto}
                     </div>
-                </div>
-
-                <div style="background: var(--bg-color); border-radius: 20px; padding: 20px; border: 1px solid var(--border-color); flex-shrink: 0;">
-                    <h3 style="color: var(--text-color); margin: 0 0 12px 0; font-size: 16px;">🎯 Mi Meta de Predicación</h3>
-                    <select id="select-meta-horas" style="width: 100%; padding: 12px; border-radius: 8px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); margin-bottom: 10px; font-size: 14px; outline: none;">
-                        <option value="0">Sin meta fija</option>
-                        <option value="15">Precursor Auxiliar (15 hs)</option>
-                        <option value="30">Precursor Auxiliar (30 hs)</option>
-                        <option value="50">Precursor Regular (50 hs)</option>
-                        <option value="-1">Meta personalizada...</option>
-                    </select>
-                    <div id="caja-meta-personalizada" style="display: none; margin-bottom: 10px;">
-                        <input type="number" id="input-meta-personalizada" placeholder="Ej: 20 hs" style="width: 100%; padding: 12px; border-radius: 8px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-sizing: border-box; font-size: 14px; outline: none;">
-                    </div>                    
                 </div>
 
                 <div style="display: flex; flex-direction: column; background: var(--bg-color, #25242C); border-radius: 20px; overflow: hidden; border: 1px solid var(--border-color, rgba(255,255,255,0.04)); flex-shrink: 0;">
@@ -764,37 +751,46 @@ function activarVigilanteRealtime(email, congId, nombreCompleto) {
 
         const congData = docSnap.data();
         const rolesMap = congData.roles || {};
-        const miRolActual = rolesMap[email];
+        const rolesRaw = rolesMap[email]; // Puede ser string o Array
+
+        if (!rolesRaw) { manejarExpulsionORechazo(); return; }
+
+        // Normalizamos a Array de minúsculas para comparaciones seguras
+        let rolesArray = [];
+        if (Array.isArray(rolesRaw)) {
+            rolesArray = rolesRaw.map(r => typeof r === 'string' ? r.toLowerCase().trim() : '');
+        } else if (typeof rolesRaw === 'string') {
+            rolesArray = [rolesRaw.toLowerCase().trim()];
+        }
 
         const appTitleEl = document.querySelector('.app-title');
         if (appTitleEl) appTitleEl.innerText = congData.nombre || `Congregación ${congId}`;
 
-        if (miRolActual === 'pendiente') {
-            window.miUsuario.rol = 'pendiente';
+        if (rolesArray.includes('pendiente')) {
+            window.miUsuario.rol = rolesRaw;
             window.miUsuario.congregacionId = congId;
             window.miUsuario.congregacionNombre = congData.nombre || '';
             mostrarPantallaSalaEspera(congId, congData.nombre || `Congregación ${congId}`, email, nombreCompleto);
-        } else if (miRolActual) {
+        } else if (rolesArray.length > 0) {
             document.getElementById('contenedor-onboarding')?.remove();
             toggleContenidoApp(true);
 
-            window.miUsuario = { email, nombre: nombreCompleto, rol: miRolActual, congregacionId: congId, congregacionNombre: congData.nombre || '' };
+            // Guardamos el rol original (rolesRaw) para mantener la info intacta
+            window.miUsuario = { email, nombre: nombreCompleto, rol: rolesRaw, congregacionId: congId, congregacionNombre: congData.nombre || '' };
             escucharHorasMensuales();
 
-            aplicarCandadoPrivacidad(miRolActual);
+            aplicarCandadoPrivacidad(rolesRaw);
 
             const btnFabRegistro = document.getElementById('btn-fab-registro');
             if (btnFabRegistro) {
-                if (miRolActual === 'siervo' || miRolActual === 'ayudante' || miRolActual === 'conductor') {
-                    btnFabRegistro.style.display = 'block';
-                } else {
-                    btnFabRegistro.style.display = 'none';
-                }
+                const puedeRegistrar = rolesArray.includes('siervo') || rolesArray.includes('ayudante') || rolesArray.includes('conductor');
+                btnFabRegistro.style.display = puedeRegistrar ? 'block' : 'none';
             }
 
             if (!window.motoresArrancados) {
                 configurarPanelAdmin();
                 inicializarMapaYVisitas();
+                inicializarProgramaPublico();
                 window.motoresArrancados = true;
             }
         } else { manejarExpulsionORechazo(); }

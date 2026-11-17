@@ -123,41 +123,68 @@ export function inicializarMinisterio() {
         }
     };
 
-    // --- EVENTOS DEL MODAL DE PERFIL Y METAS ---
+    // --- EVENTOS DEL MODAL DE PERFIL (Solo abrir/cerrar, sin metas) ---
     const btnPerfilWeb = document.querySelector('.icon-profile') || document.getElementById('btn-perfil-web'); 
     const modalPerfil = document.getElementById('modal-perfil');
     const btnCerrarPerfil = document.getElementById('btn-cerrar-perfil');
-    
-    const selectMeta = document.getElementById('select-meta-horas');
-    const cajaMetaPersonalizada = document.getElementById('caja-meta-personalizada');
-    const inputMetaPersonalizada = document.getElementById('input-meta-personalizada');
-    const btnGuardarMeta = document.getElementById('btn-guardar-meta');
 
-    // 1. Abrir el modal de perfil al tocar tus iniciales
     if (btnPerfilWeb && modalPerfil) {
         btnPerfilWeb.onclick = () => {
-            if (selectMeta) {
-                selectMeta.value = metaHoras > 0 && ![15, 30, 50].includes(metaHoras) ? "-1" : metaHoras.toString();
-                if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = selectMeta.value === "-1" ? 'block' : 'none';
-                if (selectMeta.value === "-1" && inputMetaPersonalizada) inputMetaPersonalizada.value = metaHoras;
-            }
             modalPerfil.style.display = 'flex';
         };
     }
-
-    // 2. Cerrar el modal de perfil
     if (btnCerrarPerfil) {
         btnCerrarPerfil.onclick = () => {
-            if (modalPerfil) modalPerfil.style.display = 'none';
+            modalPerfil.style.display = 'none';
         };
     }
 
-    // 3. Lógica para guardar la meta
-    if (selectMeta && btnGuardarMeta) {
-        selectMeta.onchange = (e) => {
-            if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = e.target.value === "-1" ? 'block' : 'none';
-        };
+    // --- LÓGICA DEL NUEVO MODAL DE METAS (EN LA TARJETA MORADA) ---
+    const dashboardMinisterio = document.getElementById('dashboard-ministerio');
+    const modalMetaNuevo = document.getElementById('modal-meta-ministerio');
+    const selectMeta = document.getElementById('select-meta-horas');
+    const cajaMetaPersonalizada = document.getElementById('caja-meta-personalizada');
+    const inputMetaPersonalizada = document.getElementById('input-meta-personalizada');
+    const btnCancelarMeta = document.getElementById('btn-cancelar-meta');
+    const btnGuardarMeta = document.getElementById('btn-guardar-meta');
 
+    // 1. Abrir modal al tocar la tarjeta morada
+    if (dashboardMinisterio && modalMetaNuevo) {
+        dashboardMinisterio.onclick = () => {
+            let metaActual = parseInt(localStorage.getItem('meta_horas')) || 0;
+            
+            if (selectMeta) {
+                if ([0, 15, 30, 50].includes(metaActual)) {
+                    selectMeta.value = metaActual.toString();
+                    if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = 'none';
+                } else {
+                    selectMeta.value = "-1";
+                    if (cajaMetaPersonalizada) cajaMetaPersonalizada.style.display = 'block';
+                    if (inputMetaPersonalizada) inputMetaPersonalizada.value = metaActual;
+                }
+            }
+            modalMetaNuevo.style.display = 'flex';
+        };
+    }
+
+    // 2. Mostrar/ocultar caja personalizada
+    if (selectMeta) {
+        selectMeta.onchange = (e) => {
+            if (cajaMetaPersonalizada) {
+                cajaMetaPersonalizada.style.display = e.target.value === "-1" ? 'block' : 'none';
+            }
+        };
+    }
+
+    // 3. Botón Cancelar
+    if (btnCancelarMeta && modalMetaNuevo) {
+        btnCancelarMeta.onclick = () => {
+            modalMetaNuevo.style.display = 'none';
+        };
+    }
+
+    // 4. Botón Guardar
+    if (btnGuardarMeta) {
         btnGuardarMeta.onclick = () => {
             let nuevaMeta = parseInt(selectMeta.value);
             if (nuevaMeta === -1) {
@@ -167,16 +194,14 @@ export function inicializarMinisterio() {
             metaHoras = nuevaMeta;
             localStorage.setItem('meta_horas', nuevaMeta.toString());
             
-            // Actualizamos la tarjeta al instante
-            if (typeof actualizarDashboard === 'function') actualizarDashboard();
-            
+            actualizarDashboard();
             if(window.mostrarToastM3) window.mostrarToastM3("Meta guardada.", "success");
             
-            // Opcional: cerramos el panel de perfil luego de guardar
-            if (modalPerfil) modalPerfil.style.display = 'none';
+            modalMetaNuevo.style.display = 'none';
         };
     }
 }
+
 // 4. FUNCIONES DEL RELOJ INTERNO
 function iniciarBucleReloj() {
     iconoCrono.innerText = "⏹️";
@@ -262,12 +287,6 @@ export function escucharHorasMensuales() {
         
         // 🔥 AHORA SE PINTA SIEMPRE PORQUE ESTÁ EN LA PESTAÑA, NO EN UN MODAL 🔥
         renderizarHistorialHoras();
-    });
-
-        // Si el modal está abierto, lo actualiza en vivo
-        if (document.getElementById('modal-historial-servicio').style.display === 'flex') {
-            renderizarHistorialHoras();
-        }
     });
    
 }

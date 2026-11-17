@@ -5,71 +5,71 @@ import { db } from './firebase-core.js';
 import { doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js';
 
 let bannerYaMostrado = false;
+let salidasCrudasCache = [];
 
-// 🔥 1. Normalizador de textos (Quita tildes, igual que en Android)
+// 🔥 1. Normalizador de textos
 function normalizarTexto(texto) {
     if (!texto) return "";
     return texto.trim().toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
 }
 
-// 🔥 2. Motor de tiempo: Suma 2 horas exactas a la hora fijada
-function calcularLimiteVigencia(fechaMillis, horaStr) {
+// 🔥 2. Motor de tiempo: Devuelve el milisegundo exacto del inicio de la salida
+function obtenerInicioSalidaMillis(fechaMillis, horaStr) {
+    if (!fechaMillis) return 0;
     const date = new Date(fechaMillis);
     if (horaStr && horaStr.includes(":")) {
         const partes = horaStr.split(":");
-        date.setHours(parseInt(partes[0], 10), parseInt(partes[1], 10), 0, 0);
+        date.setHours(parseInt(partes[0], 10) || 0, parseInt(partes[1], 10) || 0, 0, 0);
     }
-    return date.getTime() + (2 * 60 * 60 * 1000);
+    return date.getTime();
 }
 
-// 🔥 3. Escucha la base de datos en tiempo real (CON DETECTOR DE ERRORES)
+// 🔥 3. Escucha la base de datos en tiempo real
 export function inicializarProgramaPublico() {
-    console.log("🟡 Iniciando motor de Programa...");
+    let congId = localStorage.getItem('miCongregacionId') 
+        || (window.miUsuario && window.miUsuario.congregacionId) 
+        || localStorage.getItem('congregacionId');
     
-    // Agregué un par de llaves más por si tu app guarda la congregación con otro nombre
-const congId = localStorage.getItem('miCongregacionId');    
     if (!congId) {
-        console.error("🔴 Error: No se encontró el ID de la congregación en localStorage.");
         const contenedor = document.getElementById('lista-programa-publico');
-        if(contenedor) contenedor.innerHTML = `<p style="color: #E53935; text-align: center; margin-top: 40px;">⚠️ Error interno: No se detectó tu congregación.</p>`;
+        if(contenedor) contenedor.innerHTML = `<p style="color: #E53935; text-align: center; margin-top: 40px;">⚠️ Error interno: No se detectó tu congregación. Intenta cerrar sesión y volver a entrar.</p>`;
         return;
     }
 
-    console.log("🟢 Congregación ID encontrada:", congId);
     const planificadorRef = doc(db, 'congregaciones', congId, 'planificador', 'semana_actual');
     
     onSnapshot(planificadorRef, (docSnap) => {
-        console.log("🟢 Respuesta de Firebase recibida. ¿Existe el documento?:", docSnap.exists());
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            procesarSalidas(data.salidas || []);
-        } else {
-            renderizarPrograma([]);
-        }
+        salidasCrudasCache = docSnap.exists() ? (docSnap.data().salidas || []) : [];
+        procesarSalidas(salidasCrudasCache);
     }, (error) => {
         console.error("🔴 Firebase bloqueó la lectura:", error);
         const contenedor = document.getElementById('lista-programa-publico');
         if(contenedor) contenedor.innerHTML = `<p style="color: #E53935; text-align: center; margin-top: 40px;">⚠️ Permiso denegado al leer el programa.</p>`;
     });
+
+    // Reloj automático cada 30 segundos para que caigan las salidas 1 hora después de su inicio
+    if (window.relojProgramaPublico) clearInterval(window.relojProgramaPublico);
+    window.relojProgramaPublico = setInterval(() => {
+        procesarSalidas(salidasCrudasCache);
+    }, 30000);
 }
-// 🔥 4. Procesa y filtra las salidas
+
+// 🔥 4. Procesa, ordena y filtra las salidas (1 hora de vigencia)
 function procesarSalidas(salidas) {
     const ahora = Date.now();
+    const unaHoraMs = 1 * 60 * 60 * 1000;
     
-    // Leemos el nombre exacto que guardamos en auth-service.js
     const miNombreCompleto = localStorage.getItem('nombre_completo_publicador') || "";
     const miNombreCompletoNorm = normalizarTexto(miNombreCompleto);
 
-    // FILTRO: Solo dejamos las que no hayan pasado su límite de 2 horas
-    const salidasVigentes = salidas.filter(salida => {
-        const limite = calcularLimiteVigencia(salida.fechaMillis, salida.horaStr);
-        return ahora <= limite;
-    }).sort((a, b) => (a.fechaMillis || 0) - (b.fechaMillis || 0));
+    const salidasVigentes = salidas
+        .map(s => ({ ...s, inicioExacto: obtenerInicioSalidaMillis(s.fechaMillis, s.horaStr) }))
+        .filter(s => s.inicioExacto > 0 && ahora <= (s.inicioExacto + unaHoraMs))
+        .sort((a, b) => a.inicioExacto - b.inicioExacto);
 
     renderizarPrograma(salidasVigentes);
 
-    // LÓGICA DEL BANNER ANIMADO
     if (!bannerYaMostrado) {
         const misSalidas = salidasVigentes.filter(s => {
             const condNorm = normalizarTexto(s.conductor || "");
@@ -103,9 +103,7 @@ function mostrarBannerAsignacion(salida) {
         banner.style.opacity = '1';
     }, 1200);
 
-    // Desaparece a los 15 segundos
     setTimeout(() => { ocultarBanner(banner); }, 16200);
-
     banner.onclick = () => ocultarBanner(banner);
 }
 
@@ -115,7 +113,7 @@ function ocultarBanner(banner) {
     setTimeout(() => { banner.style.display = 'none'; }, 500);
 }
 
-// 🔥 6. Dibujar las tarjetas idénticas a Compose
+// 🔥 6. Dibujar las tarjetas (Destacando la próxima salida)
 function renderizarPrograma(salidas) {
     const contenedor = document.getElementById('lista-programa-publico');
     if (!contenedor) return;
@@ -127,25 +125,49 @@ function renderizarPrograma(salidas) {
 
     contenedor.innerHTML = '';
     
-    salidas.forEach(salida => {
+    salidas.forEach((salida, index) => {
+        const esLaProxima = index === 0;
         const date = new Date(salida.fechaMillis);
         const opciones = { weekday: 'long', day: 'numeric', month: 'long' };
         let fechaStr = date.toLocaleDateString('es-ES', opciones);
         fechaStr = fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1);
 
         const card = document.createElement('div');
-        card.style.cssText = 'background: var(--surface-color); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); margin-bottom: 16px;';
+        const bordeProxima = esLaProxima ? 'border: 2px solid #FFC107;' : 'border: 1px solid transparent;';
+        card.style.cssText = `background: var(--surface-color); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); margin-bottom: 16px; ${bordeProxima}`;
         
         const territorios = salida.tipo === "Exhibidores" ? "N/A" : (salida.territorios || "");
 
+        let lugarHtml = salida.lugar || '';
+        if (salida.latitud && salida.longitud) {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            
+            let mapsUrl = `https://www.google.com/maps/search/?api=1&query=${salida.latitud},${salida.longitud}`;
+            if (isAndroid) {
+                mapsUrl = `geo:${salida.latitud},${salida.longitud}?q=${salida.latitud},${salida.longitud}(${encodeURIComponent(salida.lugar)})`;
+            } else if (isIOS) {
+                mapsUrl = `maps://?q=${salida.latitud},${salida.longitud}`;
+            }
+
+            lugarHtml = `<a href="${mapsUrl}" target="_blank" style="color: var(--primary-color, #CBA4FF); text-decoration: underline; font-weight: bold;">${salida.lugar}</a>`;
+        }
+
+        const badgeProxima = esLaProxima 
+            ? `<span style="background: #FFC107; color: #1A1A1A; font-size: 10px; font-weight: 900; padding: 3px 8px; border-radius: 100px; letter-spacing: 0.5px; margin-left: 8px;">PRÓXIMA</span>` 
+            : '';
+
         card.innerHTML = `
             <div style="background: var(--primary-container, #4b2c91); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: var(--on-primary-container, white); font-weight: bold; font-size: 15px;">${fechaStr}</span>
+                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                    <span style="color: var(--on-primary-container, white); font-weight: bold; font-size: 15px;">${fechaStr}</span>
+                    ${badgeProxima}
+                </div>
                 <span style="color: var(--primary-color, #CBA4FF); font-weight: 900; font-size: 18px;">${salida.horaStr || ''}</span>
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--text-color); font-size: 14px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="color: gray;">📍</span> <strong>Lugar:</strong> ${salida.lugar || ''}
+                    <span style="color: gray;">📍</span> <strong>Lugar:</strong> ${lugarHtml}
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="color: gray;">👤</span> <strong>Conductor:</strong> ${salida.conductor || ''}

@@ -20,19 +20,25 @@ export function obtenerColorPin(estado) {
     if (estado === 'Revisita') color = '#388E3C'; 
     if (estado === 'Estudio') color = '#FBC02D'; 
     if (estado === 'No visitar' || estado === 'Quitar de No Visitar') color = '#7B1FA2'; 
-    if (estado === 'AlertaGlobal') color = '#B71C1C'; 
-    if (estado === 'Punto de Salida') color = '#009688'; // 🔥 Color especial para Puntos de Salida
+    if (estado === 'AlertaGlobal') color = '#D32F2F'; 
+    if (estado === 'Punto de Salida') color = '#0288D1';
+
+    const esAlerta = (estado === 'AlertaGlobal' || estado === 'No visitar' || estado === 'Quitar de No Visitar');
+    const centroSvg = esAlerta
+        ? `<rect x="7" y="12.5" width="14" height="3" rx="1.5" fill="white"/>`
+        : `<circle cx="14" cy="14" r="4.5" fill="white"/>`;
 
     const svgMarker = encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
-            <path fill="${color}" stroke="white" stroke-width="2" d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 24 12 24s12-16.5 12-24c0-6.627-5.373-12-12-12zm0 17c-2.761 0-5-2.239-5-5s2.239-5 5-5 5 2.239 5 5-2.239 5-5 5z"/>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="24" height="24">
+            <circle cx="14" cy="14" r="11.5" fill="${color}" stroke="white" stroke-width="2.5"/>
+            ${centroSvg}
         </svg>
     `);
 
     return { 
         url: `data:image/svg+xml;charset=UTF-8,${svgMarker}`, 
-        scaledSize: new google.maps.Size(28, 42),
-        anchor: new google.maps.Point(14, 42)
+        scaledSize: new google.maps.Size(24, 24),
+        anchor: new google.maps.Point(12, 12)
     };
 }
 

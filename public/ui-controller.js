@@ -13,38 +13,42 @@ export function iniciarControladorUI() {
             e.preventDefault(); 
             history.pushState({ page: 'tab' }, '', '');
             
+            // Apagamos todas las pestañas inferiores y ocultamos las vistas mayores
             navItems.forEach(t => t.classList.remove('active')); 
             views.forEach(v => v.style.display = 'none');
             
-            // Aseguramos que al cambiar de pestaña principal, las sub-vistas del Siervo se oculten
-            const vistaSoli = document.getElementById('admin-solicitudes-view');
-            if(vistaSoli) vistaSoli.style.display = 'none';
-            
-            const vistaInv = document.getElementById('admin-inventario-view');
-            if(vistaInv) vistaInv.style.display = 'none';
-            
-            const vistaRep = document.getElementById('admin-reportes-view');
-            if(vistaRep) vistaRep.style.display = 'none';
-            
-            const vistaRol = document.getElementById('admin-roles-view');
-            if(vistaRol) vistaRol.style.display = 'none';
-            
-            const panelPlan = document.getElementById('admin-planificador-view');
-            if (panelPlan) panelPlan.style.display = 'none';
-
-            // Restauramos el menú principal del Siervo
-            const dashboardAdmin = document.getElementById('admin-dashboard');
-            if(dashboardAdmin) dashboardAdmin.style.display = 'flex';
-            
+            // Encendemos la pestaña clickeada
             item.classList.add('active'); 
             const tId = item.getAttribute('data-target'); 
             const tView = document.getElementById(tId);
             
-            // Soporte dual para IDs viejos y nuevos
-            if ((tId === 'map-view' || tId === 'vista-mapa') && tView) {
+            if (!tView) return; // Por si hay algún error en el HTML
+
+            // Lógica de visualización correcta para cada pestaña
+            if (tId === 'map-view' || tId === 'vista-mapa') {
                 tView.style.display = 'flex'; 
-            } else if (tView) {
+            } else {
                 tView.style.display = 'block';
+                
+                // Si entramos a Servicio, nos aseguramos de que su pestaña superior activa se muestre bien
+                if (tId === 'servicio-view') {
+                    const topTabActiva = document.querySelector('.top-tabs-container .top-tab.active');
+                    if (topTabActiva) {
+                        const subId = topTabActiva.getAttribute('data-target');
+                        const subView = document.getElementById(subId);
+                        if (subView) subView.style.display = 'block';
+                    }
+                }
+                
+                // Si entramos a Ministerio, nos aseguramos de mostrar la sub-pestaña activa (Visitas u Horas)
+                if (tId === 'visitas-view') {
+                    const topTabActiva = document.querySelector('#visitas-view .top-tabs-container .top-tab.active');
+                    if (topTabActiva) {
+                        const subId = topTabActiva.getAttribute('data-target');
+                        const subView = document.getElementById(subId);
+                        if (subView) subView.style.display = 'block';
+                    }
+                }
             }
         });
     });
@@ -53,28 +57,37 @@ export function iniciarControladorUI() {
     const btnCerrarFicha = document.getElementById('btn-cerrar-ficha');
     if (btnCerrarFicha) btnCerrarFicha.onclick = () => history.back();
    
-    inicializarModalListaPuntos();
+    if (typeof inicializarModalListaPuntos === 'function') {
+        inicializarModalListaPuntos();
+    }
 }
-
-// 🔥 EL CANDADO DEFINITIVO DE PRIVACIDAD 🔥
+// 🔥 EL CANDADO DEFINITIVO DE PRIVACIDAD (SOPORTA ARRAYS Y TEXTOS) 🔥
 export function aplicarCandadoPrivacidad(rol) {
+    // 1. Normalizamos el rol: Si es texto lo hacemos lista, si es lista la limpiamos
+    let rolesArray = [];
+    if (Array.isArray(rol)) {
+        rolesArray = rol.map(r => typeof r === 'string' ? r.toLowerCase().trim() : '');
+    } else if (typeof rol === 'string') {
+        rolesArray = [rol.toLowerCase().trim()];
+    }
+    
+    console.log("🔐 Candado comprobando roles:", rolesArray);
+
     const tabServicio = document.querySelector('.nav-item[data-target="servicio-view"]') || document.querySelector('.nav-item[data-target="vista-planificador"]');
     const tabPrograma = document.querySelector('.nav-item[data-target="programa-view"]') || document.querySelector('.nav-item[data-target="vista-territorios"]');
     
-    // 1. Mostrar Programa para TODOS
-    if (tabPrograma) {
-        tabPrograma.style.display = 'flex';
-    }
+    // 2. Mostrar Programa para TODOS
+    if (tabPrograma) tabPrograma.style.display = 'flex';
 
     if (!tabServicio) return;
 
-    // 2. Mostrar Servicio SOLO para Alta Gerencia
-    if (rol === 'siervo' || rol === 'ayudante') {
+    // 3. Revisar si entre todos sus roles está "siervo" o "ayudante"
+    const esAltaGerencia = rolesArray.includes('siervo') || rolesArray.includes('ayudante');
+
+    if (esAltaGerencia) {
         tabServicio.style.display = 'flex'; 
     } else {
-        // Publicadores, invitados y CONDUCTORES rebotan acá
         tabServicio.style.display = 'none';
-        
         // Si estaba espiando la URL, lo pateamos al mapa
         if (tabServicio.classList.contains('active')) {
             const tabMapa = document.querySelector('.nav-item[data-target="map-view"]') || document.querySelector('.nav-item[data-target="vista-mapa"]');
