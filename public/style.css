@@ -317,6 +317,13 @@ button:active { opacity: 0.8; }
    MODALES GENERALES Y FICHA DE VISITA
    ========================================= */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--modal-overlay); z-index: 3000; flex-direction: column; display: flex; align-items: center; justify-content: center;}
+#ficha-modal {
+    background-color: var(--bg-color) !important;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
 .ficha-header { 
     background-color: var(--surface-color); 
     color: var(--text-color); 
